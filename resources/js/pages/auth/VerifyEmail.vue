@@ -1,47 +1,71 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
-import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
-import { logout } from '@/routes';
-import { send } from '@/routes/verification';
+import { Form, Head, Link } from '@inertiajs/vue3'
+import AuthSplitLayoutLoginRegistro from '@/layouts/AuthSplitLayoutLoginRegistro.vue'
+import { Spinner } from '@/components/ui/spinner'
+import { logout } from '@/routes'
+import { send } from '@/routes/verification'
 
-defineOptions({
-    layout: {
-        title: 'Verify email',
-        description:
-            'Please verify your email address by clicking on the link we just emailed to you.',
-    },
-});
-
-defineProps<{
+const props = defineProps<{
     status?: string;
-}>();
+}>()
 </script>
 
 <template>
-    <Head title="Email verification" />
+    <Head title="Verificar correo" />
 
-    <div
-        v-if="status === 'verification-link-sent'"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+    <AuthSplitLayoutLoginRegistro
+        title="Verifica tu correo"
+        image-src="/images/prueba.png"
+        logo-src="/images/destinariologo1.png"
     >
-        A new verification link has been sent to the email address you provided
-        during registration.
-    </div>
+        <div class="flex w-full flex-col items-center">
+            <div class="flex w-full max-w-[530px] flex-col gap-8">
+                <!-- subtítulo -->
+                <div class="flex flex-col items-center gap-2 text-center -mt-9">
+                    <p class="max-w-[430px] text-center font-[Nunito] text-[20px] font-normal text-[#B8BEB8]">
+                        Te enviamos un enlace de verificación a tu correo electrónico.
+                        Da clic en ese enlace para activar tu cuenta.
+                    </p>
+                </div>
 
-    <Form
-        v-bind="send.form()"
-        class="space-y-6 text-center"
-        v-slot="{ processing }"
-    >
-        <Button :disabled="processing" variant="secondary">
-            <Spinner v-if="processing" />
-            Resend verification email
-        </Button>
+                <!-- mensaje de reenvío -->
+                <div
+                    v-if="props.status === 'verification-link-sent'"
+                    class="rounded-[12px] bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-600"
+                >
+                    Se ha enviado un nuevo enlace de verificación al correo que proporcionaste durante tu registro.
+                </div>
 
-        <TextLink :href="logout()" as="button" class="mx-auto block text-sm">
-            Log out
-        </TextLink>
-    </Form>
+                <!-- formulario -->
+                <Form
+                    v-bind="send.form()"
+                    v-slot="{ processing }"
+                    class="flex w-full flex-col items-center"
+                >
+                    <div class="flex w-full flex-col items-center gap-8">
+                        <button
+                            type="submit"
+                            :disabled="processing"
+                            class="h-[50px] w-[260px] rounded-[50px] bg-[#00BF63] font-['Noto_Serif_Tamil'] text-[20px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:brightness-95 disabled:opacity-70"
+                        >
+                            <span v-if="!processing">Reenviar correo</span>
+                            <span v-else class="inline-flex items-center gap-2">
+                                <Spinner />
+                                Enviando...
+                            </span>
+                        </button>
+
+                        <Link
+                            :href="logout()"
+                            method="post"
+                            as="button"
+                            class="text-center font-['Nunito_Sans'] text-[20px] text-[#B8BEB8] no-underline hover:underline underline-offset-4"
+                        >
+                            Cerrar sesión
+                        </Link>
+                    </div>
+                </Form>
+            </div>
+        </div>
+    </AuthSplitLayoutLoginRegistro>
 </template>

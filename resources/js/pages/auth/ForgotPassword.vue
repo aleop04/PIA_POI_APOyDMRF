@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, Link } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
-import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
 import { login } from '@/routes';
 import { email } from '@/routes/password';
 
 defineOptions({
     layout: {
-        title: 'Forgot password',
-        description: 'Enter your email to receive a password reset link',
+        title: 'Recuperar contraseña',
+        description: 'Ingresa tu email para recibir un link de recuperación',
     },
 });
 
@@ -22,45 +17,100 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Forgot password" />
+    <Head title="Recuperar contraseña" />
 
-    <div
-        v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
-    >
-        {{ status }}
-    </div>
+    <div class="min-h-screen overflow-hidden bg-[#FFF1D9]">
+        <div class="relative flex min-h-screen items-center justify-center px-4 py-10">
+            <!-- fondo -->
+            <img
+                src="/images/fondopasw.jpeg"
+                alt="Fondo"
+                class="absolute inset-0 h-full w-full object-cover"
+            />
 
-    <div class="space-y-6">
-        <Form v-bind="email.form()" v-slot="{ errors, processing }">
-            <div class="grid gap-2">
-                <Label for="email">Email address</Label>
-                <Input
-                    id="email"
-                    type="email"
-                    name="email"
-                    autocomplete="off"
-                    autofocus
-                    placeholder="email@example.com"
-                />
-                <InputError :message="errors.email" />
-            </div>
+            <!-- tarjeta -->
+            <div
+                class="relative z-10 w-full max-w-[553px] rounded-[68px] bg-white px-[62px] pt-[64px] pb-[64px] shadow-[0px_10px_30px_rgba(0,0,0,0.10)]"
+            >
+                <!-- encabezado -->
+                <div class="flex flex-col items-center gap-4 text-center">
+                    <img
+                        src="/images/destinariologo1.png"
+                        alt="Recuperar contraseña"
+                        class="h-[121px] w-[121px] object-contain"
+                    />
 
-            <div class="my-6 flex items-center justify-start">
-                <Button
-                    class="w-full"
-                    :disabled="processing"
-                    data-test="email-password-reset-link-button"
+                    <div class="flex w-full max-w-[473px] flex-col items-center gap-4">
+                        <h1
+                            class="text-center font-['Nunito'] text-[29px] leading-none font-bold text-[#FF7608]"
+                        >
+                            Recuperación de contraseña
+                        </h1>
+
+                        <p
+                            class="text-center font-['Nunito_Sans'] text-[20px] leading-[22px] font-normal text-[#B8BEB8]"
+                        >
+                            Ingresa tu email para recibir el link de recuperación
+                        </p>
+                    </div>
+                </div>
+
+                <!-- mensaje de éxito -->
+                <div
+                    v-if="status"
+                    class="mt-8 rounded-[12px] bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-700"
                 >
-                    <Spinner v-if="processing" />
-                    Email password reset link
-                </Button>
-            </div>
-        </Form>
+                    {{ status }}
+                </div>
 
-        <div class="space-x-1 text-center text-sm text-muted-foreground">
-            <span>Or, return to</span>
-            <TextLink :href="login()">log in</TextLink>
+                <!-- formulario -->
+                <div class="mt-[22px]">
+                    <Form v-bind="email.form()" v-slot="{ errors, processing }">
+                        <div class="flex flex-col gap-[41px]">
+                            <div class="flex flex-col gap-[11px]">
+                                <label
+                                    for="email"
+                                    class="font-['Noto_Serif_Tamil'] text-[16px] font-bold text-black"
+                                >
+                                    Correo electrónico
+                                </label>
+
+                                <input
+                                    id="email"
+                                    type="email"
+                                    name="email"
+                                    autocomplete="off"
+                                    autofocus
+                                    placeholder=""
+                                    class="h-[39px] w-full rounded-[9px] border border-black/13 bg-white px-[10px] text-black placeholder:text-gray-400 outline-none transition focus:border-[#FF7608]"
+                                />
+
+                                <InputError :message="errors.email" />
+                            </div>
+
+                            <div class="flex flex-col items-center gap-7">
+                                <button
+                                    type="submit"
+                                    :disabled="processing"
+                                    data-test="email-password-reset-link-button"
+                                    class="flex h-[50px] w-full max-w-[296px] items-center justify-center rounded-[50px] bg-[#00BF63] px-4 text-center font-['Noto_Serif_Tamil'] text-[17px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                    {{ processing ? 'Enviando...' : 'Enviar link de recuperación' }}
+                                </button>
+
+                                <div
+                                    class="text-center font-['Nunito_Sans'] text-[20px] font-normal text-[#B8BEB8]"
+                                >
+                                    Regresar al
+                                    <Link :href="login().url" class="text-[#B8BEB8] no-underline hover:underline underline-offset-4">
+                                        Inicia sesión aquí
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    </Form>
+                </div>
+            </div>
         </div>
     </div>
 </template>

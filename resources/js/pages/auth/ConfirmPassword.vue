@@ -1,3 +1,5 @@
+<!-- tal vez la descarte o la haga modal idk -->
+
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
