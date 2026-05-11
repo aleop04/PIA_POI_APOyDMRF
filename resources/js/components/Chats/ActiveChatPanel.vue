@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import UserAvatar from '@/components/UserAvatar.vue';
+import axios from 'axios';
 
 const showAttachMenu = ref(false);
 
@@ -11,10 +13,6 @@ function handleClickOutside(event: MouseEvent) {
     showAttachMenu.value = false;
 }
 
-onMounted(() => {
-    document.addEventListener('click', handleClickOutside);
-});
-
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside);
 });
@@ -25,6 +23,7 @@ type ChatUser = {
     last_name: string;
     username: string;
     last_seen_at: string | null;
+    profile_photo: string | null;
 };
 
 type Message = {
@@ -37,35 +36,6 @@ type Message = {
     sender?: ChatUser;
 };
 
-const emit = defineEmits<{
-    (e: 'toggle-info'): void;
-    (e: 'message-sent', message: Message): void;
-}>();
-
-const newMessage = ref('');
-
-async function sendMessage() {
-    if (!newMessage.value.trim() || !props.conversation) return;
-
-    const response = await fetch(`/chats/${props.conversation.id}/messages`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content') ?? '',
-        },
-        body: JSON.stringify({
-            body: newMessage.value,
-        }),
-    });
-
-    const data = await response.json();
-
-    props.messages.push(data.message); 
-    newMessage.value = '';
-}
-
 const props = defineProps<{
     user?: ChatUser | null;
     groupUsers?: ChatUser[];
@@ -74,12 +44,57 @@ const props = defineProps<{
         id: number;
         type: 'private' | 'group';
         name: string | null;
+        photo: string | null;
     } | null;
 
-    messages: any[]; // cambiar despues pa tipear
-
+    messages: any[];
 }>();
 
+const emit = defineEmits<{
+    (e: 'toggle-info'): void;
+    (e: 'message-sent', message: Message): void;
+}>();
+
+const newMessage = ref('');
+
+const messagesContainer = ref<HTMLElement | null>(null);
+
+function scrollToBottom() {
+    nextTick(() => {
+        if (!messagesContainer.value) return;
+
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    });
+}
+
+watch(
+    () => props.messages.length,
+    () => {
+        scrollToBottom();
+    },
+);
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside);
+    scrollToBottom();
+});
+
+async function sendMessage() {
+    if (!newMessage.value.trim() || !props.conversation) return;
+
+    try {
+        const res = await axios.post(`/chats/${props.conversation.id}/messages`, {
+            body: newMessage.value,
+            type: 'text',
+        });
+
+        emit('message-sent', res.data.message);
+
+        newMessage.value = '';
+    } catch (error: any) {
+        console.error(error.response?.data ?? error);
+    }
+}
 </script>
 
 <template>
@@ -88,17 +103,20 @@ const props = defineProps<{
         <header class="absolute left-[27px] top-[24px] flex w-[calc(100%-54px)] items-center justify-between">
             <!-- Usuario -->
             <div class="flex items-center gap-3">
-                <div
-                    class="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-[#FF7608] outline outline-2 outline-[#FFEBC9]"
-                >
-                    <img src="/icons/User.svg" alt="Usuario" class="h-7 w-7" />
-                </div>
+                <UserAvatar
+                    :photo="
+                        conversation?.type === 'group'
+                            ? conversation?.photo
+                            : user?.profile_photo
+                    "
+                    className="h-[44px] w-[44px] outline outline-2 outline-[#FFEBC9]"
+                />
 
                 <h2 class="font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]">
                     {{
                         conversation?.type === 'group'
-                        ? (conversation.name || 'Grupo sin nombre')
-                        : user?.username
+                            ? conversation.name
+                            : user?.username
                     }}
                 </h2>
             </div>
@@ -123,7 +141,8 @@ const props = defineProps<{
         <div class="absolute top-[86px] h-[1px] w-full bg-[#FF7608]" />
 
         <section
-            class="absolute left-[27px] top-[114px] flex w-[calc(100%-54px)] flex-col gap-[20px] overflow-y-auto max-h-[500px]"
+            ref="messagesContainer"
+            class="chat-scroll invisible-scrollbar absolute left-[27px] top-[114px] flex max-h-[570px] w-[calc(100%-54px)] flex-col gap-[20px] overflow-y-auto pb-[20px]"
         >
             <div
                 v-for="msg in messages"
@@ -134,26 +153,25 @@ const props = defineProps<{
                 <!-- MENSAJE PROPIO -->
                 <div
                     v-if="msg.sender_id === $page.props.auth.user.id"
-                    class="max-w-[541px] rounded-[32px] bg-[#604646] px-5 py-2 text-white"
+                    class="max-w-[541px] whitespace-pre-wrap break-words rounded-[32px] bg-[#604646] px-5 py-2 text-white"
                 >
-                    {{ msg.body_encrypted }}
+                    {{ msg.body }}
                 </div>
 
                 <!-- MENSAJE RECIBIDO -->
                 <div
                     v-else
-                    class="flex items-center gap-[15px]"
+                    class="flex items-end gap-[15px]"
                 >
-                    <div
-                        class="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-[#FF7608]"
-                    >
-                        <img src="/icons/User.svg" class="h-7 w-7" />
-                    </div>
+                    <UserAvatar
+                        :photo="msg.sender?.profile_photo"
+                        className="h-[44px] w-[44px] shrink-0"
+                    />
 
                     <div
-                        class="max-w-[541px] rounded-[32px] bg-[#FF7608] px-5 py-2 text-[#442F2F]"
+                        class="max-w-[541px] whitespace-pre-wrap break-words rounded-[32px] bg-[#FF7608] px-5 py-2 text-[#442F2F]"
                     >
-                        {{ msg.body_encrypted }}
+                        {{ msg.body }}
                     </div>
                 </div>
             </div>
@@ -223,3 +241,13 @@ const props = defineProps<{
         </footer>
     </div>
 </template>
+
+<style scoped>
+.invisible-scrollbar {
+    scrollbar-width: none;
+}
+
+.invisible-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+</style>

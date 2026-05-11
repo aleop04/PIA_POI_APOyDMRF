@@ -18,7 +18,16 @@ use App\Notifications\VerifyEmailCustomNotification;
 
 
 
-#[Fillable(['first_name', 'last_name', 'username', 'email', 'password'])]
+#[Fillable([
+    'first_name', 
+    'last_name', 
+    'username', 
+    'email', 
+    'password', 
+    'bio',            // <--- Importante
+    'profile_photo',  // <--- Importante
+    'cover_photo'     // <--- Importante
+])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {

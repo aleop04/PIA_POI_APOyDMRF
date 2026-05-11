@@ -6,15 +6,14 @@ use App\Models\Conversation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use App\Models\User;
 
 class ConversationController extends Controller
 {
     public function updateName(Request $request, Conversation $conversation)
     {
-        abort_unless(
-            $conversation->users()->where('users.id', Auth::id())->exists(),
-            403
-        );
+        $this->authorizeConversationMember($conversation);
 
         abort_unless($conversation->type === 'group', 403);
 
@@ -27,16 +26,13 @@ class ConversationController extends Controller
         ]);
 
         return response()->json([
-            'conversation' => $conversation,
+            'conversation' => $conversation->load('users'),
         ]);
     }
 
     public function updatePhoto(Request $request, Conversation $conversation)
     {
-        abort_unless(
-            $conversation->users()->where('users.id', Auth::id())->exists(),
-            403
-        );
+        $this->authorizeConversationMember($conversation);
 
         abort_unless($conversation->type === 'group', 403);
 
@@ -54,8 +50,11 @@ class ConversationController extends Controller
             'photo' => $path,
         ]);
 
+        $conversation->load('users');
+
+        $conversation->photo = Storage::url($path);
+
         return response()->json([
-            'photo' => Storage::url($path),
             'conversation' => $conversation,
         ]);
     }
@@ -63,20 +62,67 @@ class ConversationController extends Controller
     public function storeGroup(Request $request)
     {
         $validated = $request->validate([
-            'user_ids' => ['required', 'array', 'min:2'],
-            'user_ids.*' => ['exists:users,id'],
+            'user_ids' => ['required', 'array', 'min:2', 'max:4'],
+            'user_ids.*' => [
+                'integer',
+                Rule::exists('users', 'id'),
+                Rule::notIn([Auth::id()]),
+            ],
         ]);
+
+        $userIds = collect($validated['user_ids'])
+            ->unique()
+            ->values()
+            ->all();
+
+        abort_if(count($userIds) < 2 || count($userIds) > 4, 422);
+
+        // Todos los integrantes del grupo: usuario actual + usuarios seleccionados
+        $allUserIds = collect([Auth::id(), ...$userIds])
+            ->unique()
+            ->values();
+
+        // Obtener usuarios en el mismo orden
+        $users = User::whereIn('id', $allUserIds)
+            ->get()
+            ->sortBy(fn ($user) => $allUserIds->search($user->id))
+            ->values();
+
+        // Nombre base: usernames de todos
+        $baseName = $users
+            ->pluck('username')
+            ->join(', ');
+
+        // Buscar grupos existentes con exactamente los mismos integrantes
+        $existingSameGroups = Conversation::where('type', 'group')
+            ->with('users:id')
+            ->get()
+            ->filter(function ($conversation) use ($allUserIds) {
+                $conversationUserIds = $conversation->users
+                    ->pluck('id')
+                    ->sort()
+                    ->values();
+
+                return $conversationUserIds->toArray() === $allUserIds
+                    ->sort()
+                    ->values()
+                    ->toArray();
+            });
+
+        // Si ya existe uno igual, agregar 2, 3, etc.
+        $groupNumber = $existingSameGroups->count() + 1;
+
+        $groupName = $groupNumber === 1
+            ? $baseName
+            : $baseName . ' ' . $groupNumber;
 
         $conversation = Conversation::create([
             'type' => 'group',
-            'name' => null,
+            'name' => $groupName,
             'created_by' => Auth::id(),
         ]);
 
-        $conversation->users()->attach([
-            Auth::id(),
-            ...$validated['user_ids'],
-        ]);
+        $conversation->users()->attach($allUserIds->all());
 
         return response()->json([
             'conversation' => $conversation->load('users'),
@@ -86,25 +132,33 @@ class ConversationController extends Controller
     public function storePrivate(Request $request)
     {
         $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
+            'user_id' => [
+                'required',
+                'integer',
+                Rule::exists('users', 'id'),
+            ],
         ]);
 
-        abort_if((int) $validated['user_id'] === Auth::id(), 422);
+        $userIds = collect([Auth::id(), (int) $validated['user_id']])
+            ->unique()
+            ->values();
 
-        $existingConversation = Auth::user()
+        $existingConversationQuery = Auth::user()
             ->conversations()
             ->where('type', 'private')
-            ->whereHas('users', function ($query) use ($validated) {
-                $query->where('users.id', $validated['user_id']);
-            })
-            ->first();
+            ->has('users', '=', $userIds->count());
+
+        foreach ($userIds as $userId) {
+            $existingConversationQuery->whereHas('users', function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            });
+        }
+
+        $existingConversation = $existingConversationQuery->first();
 
         if ($existingConversation) {
             return response()->json([
                 'conversation' => $existingConversation->load('users'),
-                'user' => $existingConversation->users
-                    ->where('id', $validated['user_id'])
-                    ->first(),
             ]);
         }
 
@@ -113,17 +167,18 @@ class ConversationController extends Controller
             'created_by' => Auth::id(),
         ]);
 
-        $conversation->users()->attach([
-            Auth::id(),
-            $validated['user_id'],
-        ]);
+        $conversation->users()->attach($userIds->all());
 
         return response()->json([
             'conversation' => $conversation->load('users'),
-            'user' => $conversation->users
-                ->where('id', $validated['user_id'])
-                ->first(),
         ]);
     }
 
+    private function authorizeConversationMember(Conversation $conversation): void
+    {
+        abort_unless(
+            $conversation->users()->where('users.id', Auth::id())->exists(),
+            403
+        );
+    }
 }

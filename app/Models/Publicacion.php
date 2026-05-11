@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Publicacion extends Model
 {
-    protected $table = 'publicaciones'; // 🔥 ESTO FALTABA
+    protected $table = 'publicaciones'; // 
 
     protected $fillable = [
         'titulo',

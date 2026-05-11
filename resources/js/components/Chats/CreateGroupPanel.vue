@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 
 type User = {
     id: number;
@@ -23,9 +24,13 @@ const search = ref('');
 const users = ref<User[]>([]);
 const selectedUsers = ref<User[]>([]);
 
-const canCreateGroup = computed(() => selectedUsers.value.length >= 2);
+const canCreateGroup = computed(() => {
+    return selectedUsers.value.length >= 2 && selectedUsers.value.length <= 4;
+});
+
 const emit = defineEmits<{
     (e: 'open-group-chat', users: User[]): void;
+    (e: 'create-group'): void;
 }>();
 
 watch(search, async (value) => {
@@ -36,22 +41,31 @@ watch(search, async (value) => {
         return;
     }
 
-    const response = await fetch(`/users/search?q=${encodeURIComponent(query)}`);
-    const data: User[] = await response.json();
+    try {
+        const res = await axios.get(`/users/search?q=${encodeURIComponent(query)}`);
+        const data: User[] = res.data;
 
-    users.value = data.filter((user) => {
-        const isMe = user.id === authUser.value.id;
+        users.value = data.filter((user) => {
+            const isMe = user.id === authUser.value.id;
 
-        const alreadySelected = selectedUsers.value.some(
-            (selected) => selected.id === user.id,
-        );
+            const alreadySelected = selectedUsers.value.some(
+                (selected) => selected.id === user.id,
+            );
 
-        return !isMe && !alreadySelected;
-    });
+            return !isMe && !alreadySelected;
+        });
+    } catch (error) {
+        console.error(error);
+    }
 });
 
 function selectUser(user: User) {
     if (user.id === authUser.value.id) return;
+
+    if (selectedUsers.value.length >= 4) {
+        console.log('Máximo 4 usuarios');
+        return;
+    }
 
     const alreadySelected = selectedUsers.value.some(
         (selected) => selected.id === user.id,
@@ -62,31 +76,21 @@ function selectUser(user: User) {
     selectedUsers.value.push(user);
     search.value = '';
     users.value = [];
+
+    emit('open-group-chat', selectedUsers.value);
 }
 
 function removeUser(userId: number) {
     selectedUsers.value = selectedUsers.value.filter((user) => user.id !== userId);
+
+    emit('open-group-chat', selectedUsers.value);
 }
 
-async function createGroup() {
+function createGroup() {
     if (!canCreateGroup.value) return;
 
-    const response = await fetch('/conversations/group', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content') ?? '',
-        },
-        body: JSON.stringify({
-            user_ids: selectedUsers.value.map(user => user.id),
-        }),
-    });
-
-    const data = await response.json();
-
-    emit('open-group-chat', data.conversation.users);
+    emit('open-group-chat', selectedUsers.value);
+    emit('create-group');
 }
 </script>
 

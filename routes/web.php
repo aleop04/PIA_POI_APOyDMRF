@@ -1,14 +1,18 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-use App\Models\Publicacion;
-use Illuminate\Http\Request;
 use App\Http\Controllers\UserSearchController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\SocketUserController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use App\Http\Controllers\DestinarioPerfilController;
+use App\Http\Controllers\PerfilExternoController;
+
 
 
 
@@ -24,32 +28,27 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('/dashboard', 'Dashboard')->name('dashboard');
-    Route::inertia('/chats', 'Chats')->name('chats');
-    Route::inertia('/perfil', 'Perfil')->name('perfil');
+
+    // Perfil
+    Route::get('/perfil', [DestinarioPerfilController::class, 'show'])->name('perfil');
+    Route::patch('/perfil', [DestinarioPerfilController::class, 'update'])
+    ->name('perfil.update');
+    Route::post('/perfil/profile-photo', [DestinarioPerfilController::class, 'updateProfilePhoto'])
+    ->name('perfil.profile-photo');
+    Route::post('/perfil/cover-photo', [DestinarioPerfilController::class, 'updateCoverPhoto'])
+    ->name('perfil.cover-photo');
+    Route::delete('/perfil', [DestinarioPerfilController::class, 'destroy'])
+    ->name('perfil.destroy');
+
+    // Perfil externo
+    Route::get('/usuarios/{user}', [PerfilExternoController::class, 'show'])
+    ->name('usuarios.show');
+
     Route::inertia('/publicaciones/crear', 'CrearPublicacion')->name('posts.create');
-
-    // Route::get('/buscar', function (Request $request) {
-    //     $q = trim($request->query('q', ''));
-
-    //     $resultados = Publicacion::query()
-    //         ->when($q !== '', function ($query) use ($q) {
-    //             $query->where(function ($subQuery) use ($q) {
-    //                 $subQuery
-    //                     ->where('titulo', 'like', "%{$q}%")
-    //                     ->orWhere('descripcion', 'like', "%{$q}%")
-    //                     ->orWhereHas('location', function ($locationQuery) use ($q) {
-    //                         $locationQuery->where('formatted_address', 'like', "%{$q}%");
-    //                     });
-    //             });
-    //         })
-    //         ->with('location')
-    //         ->get();
-
-    //     return Inertia::render('ResultadosBusqueda', [
-    //         'q' => $q,
-    //         'resultados' => $resultados,
-    //     ]);
-    // })->name('buscar');
+    
+    Route::get('/recompensas', function () {
+        return Inertia::render('Recompensas');
+    });
 
     Route::get('/buscar', function (Request $request) {
         return Inertia::render('ResultadosBusqueda', [
@@ -58,31 +57,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('buscar');
 
-    Route::get('/users/search', [UserSearchController::class, 'index'])
-    ->name('users.search');
-
-    Route::get('/chats', [ChatController::class, 'index'])
-    ->middleware(['auth', 'verified'])
-    ->name('chats.index');
-
-    Route::get('/chats/{conversation}', [ChatController::class, 'show'])
-    ->name('chats.show');
+    // Chats
+    Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
+    Route::get('/chats/{conversation}', [ChatController::class, 'show'])->name('chats.show');
 
     Route::post('/chats/{conversation}/messages', [ChatController::class, 'sendMessage'])
-    ->name('chats.messages.store');
+        ->name('chats.messages.store');
 
-    Route::put('/conversations/{conversation}/name', [ConversationController::class, 'updateName'])
-    ->name('conversations.updateName');
-
-    Route::post('/conversations/{conversation}/photo', [ConversationController::class, 'updatePhoto'])
-    ->name('conversations.updatePhoto');
-
-    Route::post('/conversations/group', [ConversationController::class, 'storeGroup'])
-    ->middleware(['auth', 'verified']);
+    Route::get('/users/search', [UserSearchController::class, 'index'])->name('users.search');
 
     Route::post('/conversations/private', [ConversationController::class, 'storePrivate'])
-    ->middleware(['auth', 'verified']);
+        ->name('conversations.private.store');
 
+    Route::post('/conversations/group', [ConversationController::class, 'storeGroup'])
+        ->name('conversations.group.store');
+
+    Route::patch('/conversations/{conversation}/name', [ConversationController::class, 'updateName'])
+        ->name('conversations.updateName');
+
+    Route::post('/conversations/{conversation}/photo', [ConversationController::class, 'updatePhoto'])
+        ->name('conversations.updatePhoto');
 });
 
-require __DIR__.'/settings.php';
+//socket
+    Route::post('/socket/user-offline', [SocketUserController::class, 'offline'])
+    ->withoutMiddleware([VerifyCsrfToken::class]);
+
+require __DIR__ . '/settings.php';

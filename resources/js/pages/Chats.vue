@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
+import axios from 'axios';
+
 import ChatActionMenu from '@/components/Chats/ChatActionMenu.vue';
 import ChatWindow from '@/components/Chats/ChatWindow.vue';
 import ChatInfoPanel from '@/components/Chats/ChatInfoPanel.vue';
+import UserAvatar from '@/components/UserAvatar.vue';
+
+//socket
+import { connectSocket, getSocket } from '@/lib/socket';
+let socket = getSocket();
+
 
 type User = {
     id: number;
@@ -11,6 +19,7 @@ type User = {
     last_name: string;
     username: string;
     last_seen_at: string | null;
+    profile_photo: string | null;
 };
 
 type Message = {
@@ -19,6 +28,7 @@ type Message = {
     sender_id: number;
     type: string;
     body_encrypted: string | null;
+    body?: string | null;
     created_at: string;
     sender?: User;
 };
@@ -33,87 +43,386 @@ type Conversation = {
     messages?: Message[];
 };
 
-defineProps<{
+//sistema online offline desde sockets y last_seen_at en mi bd
+const onlineUserIds = ref<number[]>([]);
+
+const props = defineProps<{
     conversations: Conversation[];
+    openConversationId?: number | string | null;
 }>();
 
-const showMenu = ref(false);
+const conversationList = ref<Conversation[]>([...props.conversations]);
+const page = usePage();
+const authUserId = page.props.auth.user.id;
+console.log('Mi userId:', authUserId);
+
 const chatMode = ref<'empty' | 'create-group' | 'send-message' | 'active-chat'>('empty');
 
-const emit = defineEmits<{
-    (e: 'open-chat', user: User): void;
-    (e: 'open-group-chat', users: User[]): void;
-    (e: 'toggle-info'): void;
-}>();
-
-const selectedGroupUsers = ref<User[]>([]);
-const selectedUser = ref<User | null>(null);
 const selectedConversation = ref<Conversation | null>(null);
+const selectedUser = ref<User | null>(null);
+const selectedGroupUsers = ref<User[]>([]);
 const messages = ref<Message[]>([]);
 const showChatInfo = ref(false);
 
+async function openChat(conversation: Conversation) {
+    await openConversation(conversation);
+}
+
+function getOtherUser(conversation: Conversation): User | null {
+    const otherUser = conversation.users.find(
+        (user) => Number(user.id) !== Number(authUserId),
+    );
+
+    return otherUser ?? conversation.users[0] ?? null;
+}
+
+async function openConversationById(conversationId: number) {
+    const conversation = conversationList.value.find(
+        (c) => c.id === conversationId
+    );
+
+    if (!conversation) return;
+
+    await openConversation(conversation);
+}
+
+async function openConversation(conversation: Conversation) {
+    try {
+        const res = await axios.get(`/chats/${conversation.id}`);
+        const data = res.data;
+
+        selectedConversation.value = data.conversation;
+        messages.value = data.messages ?? [];
+
+        socket?.emit('join-chat', data.conversation.id);
+
+        if (data.conversation.type === 'group') {
+            selectedGroupUsers.value = data.conversation.users;
+            selectedUser.value = null;
+        } else {
+            selectedUser.value = getOtherUser(data.conversation);
+            selectedGroupUsers.value = [];
+        }
+
+        showChatInfo.value = false;
+        chatMode.value = 'active-chat';
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function crearGrupo() {
+    if (selectedGroupUsers.value.length < 2) {
+        console.log('Selecciona al menos 2 usuarios');
+        return;
+    }
+
+    if (selectedGroupUsers.value.length > 4) {
+        console.log('Máximo 4 usuarios');
+        return;
+    }
+
+    try {
+        const res = await axios.post('/conversations/group', {
+            user_ids: selectedGroupUsers.value.map((user) => user.id),
+        });
+
+        const conversation = {
+            ...res.data.conversation,
+            messages: [],
+        };
+
+        selectedConversation.value = conversation;
+        selectedGroupUsers.value = conversation.users;
+        selectedUser.value = null;
+        messages.value = [];
+
+        addConversationIfMissing(conversation);
+
+        socket?.emit('new-conversation', conversation);
+        socket?.emit('join-chat', conversation.id);
+
+        showChatInfo.value = false;
+        chatMode.value = 'active-chat';
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function cambiarNombreGrupo(nuevoNombre: string) {
+    if (!selectedConversation.value) return;
+
+    try {
+        const res = await axios.patch(
+            `/conversations/${selectedConversation.value.id}/name`,
+            { name: nuevoNombre },
+        );
+
+        selectedConversation.value.name = res.data.conversation.name;
+
+        socket?.emit('update-conversation', res.data.conversation);
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 function openCreateGroup() {
+    selectedConversation.value = null;
+    selectedUser.value = null;
+    selectedGroupUsers.value = [];
+    messages.value = [];
+    showChatInfo.value = false;
     chatMode.value = 'create-group';
-    showMenu.value = false;
 }
 
 function openSendMessage() {
+    selectedConversation.value = null;
+    selectedUser.value = null;
+    selectedGroupUsers.value = [];
+    messages.value = [];
+    showChatInfo.value = false;
     chatMode.value = 'send-message';
-    showMenu.value = false;
 }
 
 function openGroupChat(users: User[]) {
     selectedGroupUsers.value = users;
     selectedUser.value = null;
-    chatMode.value = 'active-chat';
+    selectedConversation.value = null;
+    messages.value = [];
+    showChatInfo.value = false;
+    chatMode.value = 'create-group';
 }
 
-function openChat(user: User) {
-    selectedUser.value = user;
-    selectedGroupUsers.value = [];
-    chatMode.value = 'active-chat';
+function refreshSocketConnection() {
+    socket = getSocket();
+
+    if (!socket) return;
+
+    if (!socket.connected) {
+        socket.connect();
+    }
+
+    socket.emit('get-users-online');
+    joinAllConversationRooms();
 }
 
-function isOnline(user: User | undefined) {
-    if (!user?.last_seen_at) return false;
+function appendMessageIfMissing(newMessage: Message) {
+    const exists = messages.value.some((message) => message.id === newMessage.id);
 
-    const lastSeen = new Date(user.last_seen_at).getTime();
-    const now = Date.now();
-
-    return now - lastSeen < 2 * 60 * 1000;
+    if (!exists) {
+        messages.value.push(newMessage);
+    }
 }
 
-function getLastSeenText(user: User | undefined) {
-    if (!user?.last_seen_at) return '';
+function updateConversationLastMessage(newMessage: Message) {
+    const index = conversationList.value.findIndex(
+        (conversation) => conversation.id === newMessage.conversation_id,
+    );
+
+    if (index === -1) return;
+
+    const conversation = conversationList.value[index];
+
+    const updatedConversation = {
+        ...conversation,
+        messages: [newMessage],
+    };
+
+    conversationList.value.splice(index, 1);
+    conversationList.value.unshift(updatedConversation);
+}
+
+function updateConversationData(updatedConversation: Conversation) {
+    const index = conversationList.value.findIndex(
+        (conversation) => Number(conversation.id) === Number(updatedConversation.id),
+    );
+
+    if (index !== -1) {
+        conversationList.value[index] = {
+            ...conversationList.value[index],
+            ...updatedConversation,
+        };
+    }
+
+    if (
+        selectedConversation.value &&
+        Number(selectedConversation.value.id) === Number(updatedConversation.id)
+    ) {
+        selectedConversation.value = {
+            ...selectedConversation.value,
+            ...updatedConversation,
+        };
+    }
+}
+
+function handleGroupNameUpdated(updatedConversation: Conversation) {
+    updateConversationData(updatedConversation);
+
+    socket?.emit('update-conversation', updatedConversation);
+}
+
+function handleGroupPhotoUpdated(updatedConversation: Conversation) {
+    updateConversationData(updatedConversation);
+
+    socket?.emit('update-conversation', updatedConversation);
+}
+
+function addConversationIfMissing(conversation: Conversation) {
+    const exists = conversationList.value.some(
+        (item) => item.id === conversation.id,
+    );
+
+    if (exists) return;
+
+    conversationList.value.unshift({
+        ...conversation,
+        messages: conversation.messages ?? [],
+    });
+
+    socket?.emit('join-chat', conversation.id);
+}
+
+function handleMessageSent(newMessage: Message) {
+    if (selectedConversation.value) {
+        addConversationIfMissing({
+            ...selectedConversation.value,
+            messages: [newMessage],
+        });
+
+        socket?.emit('new-conversation', {
+            ...selectedConversation.value,
+            messages: [newMessage],
+        });
+    }
+
+    appendMessageIfMissing(newMessage);
+    updateConversationLastMessage(newMessage);
+
+    socket?.emit('send-message', newMessage);
+}
+
+function getLastMessagePreview(conversation: Conversation) {
+    const message = conversation.messages?.[0];
+
+    if (!message?.body) {
+        return 'Sin mensajes...';
+    }
+
+    if (Number(message.sender_id) === Number(authUserId)) {
+        return `Tú: ${message.body}`;
+    }
+
+    return message.body;
+}
+
+//sistema online offline desde sockets y last_seen_at en mi bd
+function isOnline(user: User | undefined | null) {
+    if (!user) return false;
+
+    return onlineUserIds.value.includes(Number(user.id));
+}
+
+function getLastSeenText(user: User | undefined | null) {
+    if (!user) return '';
+
+    if (isOnline(user)) {
+        return 'Activo';
+    }
+
+    if (!user.last_seen_at) {
+        return '';
+    }
 
     const diff = Date.now() - new Date(user.last_seen_at).getTime();
     const minutes = Math.floor(diff / 60000);
 
-    if (minutes < 1) return 'Activo';
+    if (minutes < 1) return 'Últ. vez hace un momento';
     if (minutes < 60) return `Últ. vez hace ${minutes} min`;
 
     const hours = Math.floor(minutes / 60);
     return `Últ. vez hace ${hours} h`;
 }
 
-async function openConversation(conversation: Conversation) {
-    const response = await fetch(`/chats/${conversation.id}`);
-    const data = await response.json();
-
-    selectedConversation.value = data.conversation;
-    messages.value = data.messages;
-
-    if (data.conversation.type === 'group') {
-        selectedGroupUsers.value = data.conversation.users;
-        selectedUser.value = null;
-    } else {
-        selectedUser.value = data.conversation.users[0] ?? null;
-        selectedGroupUsers.value = [];
+function handleVisibilityChange() {
+    if (!document.hidden) {
+        refreshSocketConnection();
     }
-
-    chatMode.value = 'active-chat';
 }
 
+function joinAllConversationRooms() {
+    if (!socket) return;
+
+    conversationList.value.forEach((conversation) => {
+        socket?.emit('join-chat', conversation.id);
+    });
+}
+
+onMounted(async () => {
+    socket = connectSocket(authUserId);
+
+    socket?.on('connect', refreshSocketConnection);
+
+    window.addEventListener('focus', refreshSocketConnection);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    socket?.on('users-online', (userIds: number[]) => {
+        onlineUserIds.value = userIds.map(Number);
+    });
+
+    socket?.emit('get-users-online');
+    joinAllConversationRooms();
+
+    if (props.openConversationId) {
+        await openConversationById(Number(props.openConversationId));
+    }
+
+    socket?.on('receive-message', (newMessage: Message) => {
+        if (
+            selectedConversation.value &&
+            newMessage.conversation_id === selectedConversation.value.id
+        ) {
+            appendMessageIfMissing(newMessage);
+        }
+
+        updateConversationLastMessage(newMessage);
+    });
+
+    socket?.on('conversation-created', (conversation: Conversation) => {
+        const belongsToMe = conversation.users.some(
+            (user) => Number(user.id) === Number(authUserId),
+        );
+
+        if (!belongsToMe) return;
+
+        addConversationIfMissing({
+            ...conversation,
+            messages: conversation.messages ?? [],
+        });
+
+        const firstMessage = conversation.messages?.[0];
+
+        if (firstMessage) {
+            updateConversationLastMessage(firstMessage);
+        }
+
+        socket?.emit('join-chat', conversation.id);
+    });
+
+    socket?.on('conversation-updated', (updatedConversation: Conversation) => {
+        updateConversationData(updatedConversation);
+    });
+});
+
+onBeforeUnmount(() => {
+    socket?.off('users-online');
+    socket?.off('receive-message');
+    socket?.off('conversation-updated');
+    socket?.off('conversation-created');
+
+    window.removeEventListener('focus', refreshSocketConnection);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    socket?.off('connect');
+});
 </script>
 
 <template>
@@ -143,7 +452,7 @@ async function openConversation(conversation: Conversation) {
 
                 <!-- Si no hay chats -->
                 <div
-                    v-if="conversations.length === 0"
+                    v-if="conversationList.length === 0"
                     class="mt-45 flex flex-col items-center gap-[17px]"
                 >
                     <img
@@ -162,36 +471,35 @@ async function openConversation(conversation: Conversation) {
                 <!-- Lista de chats -->
                 <div v-else class="mt-6 flex flex-col gap-[30px]">
                     <button
-                        v-for="conversation in conversations"
+                        v-for="conversation in conversationList"
                         :key="conversation.id"
                         type="button"
-                        class="flex flex-col items-start gap-2"
+                        class="cursor-pointer flex items-start gap-3"
                         @click="openConversation(conversation)"
                     >
-                        <!-- Fila superior -->
-                        <div class="flex items-center gap-3">
-                            <!-- Avatar -->
-                            <div
-                                class="flex h-[44px] w-[44px] items-center justify-center rounded-full border-2 border-[#FFEBC9] bg-[#FF7608]"
-                            >
-                                <img
-                                    src="/icons/user2.svg"
-                                    alt="Usuario"
-                                    class="h-[24px] w-[24px]"
-                                />
-                            </div>
+                        <!-- Avatar -->
+                        <UserAvatar
+                            :photo="
+                                conversation.type === 'group'
+                                    ? conversation.photo
+                                    : getOtherUser(conversation)?.profile_photo
+                            "
+                            className="h-[44px] w-[44px] border-2 border-[#FFEBC9]"
+                        />
 
-                            <!-- Nombre -->
-                            <p class="font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]">
-                                {{
-                                    conversation.type === 'group'
-                                        ? conversation.name
-                                        : conversation.users
-                                            .filter(u => u.id !== $page.props.auth.user.id)[0]?.first_name
-                                }}
-                            </p>
+                        <!-- CONTENIDO -->
+                        <div class="flex flex-col">
+                            <!-- Nombre + estado -->
+                            <div class="flex items-center gap-3">
+                                <p class="max-w-[220px] truncate text-left font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]">
+                                    {{
+                                        conversation.type === 'group'
+                                            ? conversation.name
+                                            : getOtherUser(conversation)?.username
+                                    }}
+                                </p>
 
-                            <!-- Estado activo / última vez -->
+                                <!-- Estado -->
                                 <div
                                     v-if="conversation.type === 'private'"
                                     class="flex items-center gap-2"
@@ -199,42 +507,43 @@ async function openConversation(conversation: Conversation) {
                                     <span
                                         class="h-[10px] w-[10px] rounded-full"
                                         :class="
-                                            isOnline(conversation.users.find(u => u.id !== $page.props.auth.user.id))
+                                            isOnline(getOtherUser(conversation))
                                                 ? 'bg-green-500'
                                                 : 'bg-gray-400'
                                         "
                                     ></span>
 
                                     <span class="font-['Nunito_Sans'] text-[12px] text-[#442F2F]">
-                                        {{
-                                            getLastSeenText(
-                                                conversation.users.find(u => u.id !== $page.props.auth.user.id)
-                                            )
-                                        }}
+                                        {{ getLastSeenText(getOtherUser(conversation)) }}
                                     </span>
                                 </div>
-                        </div>
+                            </div>
 
-                        <!-- Último mensaje -->
-                        <p
-                            class="w-full text-right font-['Nunito_Sans'] text-[14px] text-[#442F2F] truncate"
-                        >
-                            {{ conversation.messages?.[0]?.body_encrypted ?? 'Sin mensajes...' }}
-                        </p>
+                            <!-- Último mensaje -->
+                            <p
+                                class="max-w-[220px] mt-1 truncate text-left font-['Nunito_Sans'] text-[14px] text-[#442F2F]"
+                            >
+                                {{ getLastMessagePreview(conversation) }}
+                            </p>
+                        </div>
                     </button>
                 </div>
             </aside>
 
             <!-- Panel principal chats -->
-           <ChatWindow
+            <ChatWindow
                 :mode="chatMode"
                 :selected-user="selectedUser"
                 :selected-group-users="selectedGroupUsers"
                 :selected-conversation="selectedConversation"
                 :messages="messages"
+                :online-user-ids="onlineUserIds"
                 @open-chat="openChat"
                 @open-group-chat="openGroupChat"
+                @create-group="crearGrupo"
+                @change-group-name="cambiarNombreGrupo"
                 @toggle-info="showChatInfo = !showChatInfo"
+                @message-sent="handleMessageSent"
             />
 
             <ChatInfoPanel
@@ -242,6 +551,8 @@ async function openConversation(conversation: Conversation) {
                 :user="selectedUser"
                 :group-users="selectedGroupUsers"
                 :conversation="selectedConversation"
+                @group-name-updated="handleGroupNameUpdated"
+                @group-photo-updated="handleGroupPhotoUpdated"
             />
         </div>
     </section>

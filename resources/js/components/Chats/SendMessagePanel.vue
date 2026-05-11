@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import axios from 'axios';
 
 type User = {
     id: number;
@@ -9,8 +10,21 @@ type User = {
     last_seen_at: string | null;
 };
 
+type Conversation = {
+    id: number;
+    type: 'private' | 'group';
+    name: string | null;
+    photo: string | null;
+    created_by: number;
+    users: User[];
+};
+
 const search = ref('');
 const users = ref<User[]>([]);
+
+const emit = defineEmits<{
+    (e: 'open-chat', conversation: Conversation): void;
+}>();
 
 watch(search, async (value) => {
     const query = value.trim();
@@ -20,34 +34,28 @@ watch(search, async (value) => {
         return;
     }
 
-    const response = await fetch(`/users/search?q=${encodeURIComponent(query)}`);
-    users.value = await response.json();
-
+    try {
+        const res = await axios.get(`/users/search?q=${encodeURIComponent(query)}`);
+        users.value = res.data;
+    } catch (error) {
+        console.error(error);
+    }
 });
 
-const emit = defineEmits<{
-    (e: 'open-chat', user: User): void;
-}>();
-
 async function openChat(user: User) {
-    const response = await fetch('/conversations/private', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content') ?? '',
-        },
-        body: JSON.stringify({
+    try {
+        const res = await axios.post('/conversations/private', {
             user_id: user.id,
-        }),
-    });
+        });
 
-    const data = await response.json();
+        emit('open-chat', res.data.conversation);
 
-    emit('open-chat', data.user);
+        search.value = '';
+        users.value = [];
+    } catch (error) {
+        console.error(error);
+    }
 }
-
 </script>
 
 <template>

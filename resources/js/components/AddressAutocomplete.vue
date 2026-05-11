@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 
 type SelectedLocation = {
@@ -13,7 +13,12 @@ defineOptions({
     inheritAttrs: false,
 });
 
+const props = defineProps<{
+    modelValue: string;
+}>();
+
 const emit = defineEmits<{
+    (e: 'update:modelValue', value: string): void;
     (e: 'location-selected', value: SelectedLocation): void;
 }>();
 
@@ -66,15 +71,27 @@ onBeforeUnmount(() => {
         google.maps.event.removeListener(listener);
     }
 });
+
+watch(
+    () => props.modelValue,
+    (value) => {
+        if (inputRef.value && inputRef.value.value !== value) {
+            inputRef.value.value = value;
+        }
+    }
+);
+
 </script>
 
 <template>
     <input
-        ref="inputRef"
-        type="text"
-        v-bind="$attrs"
-        placeholder="Escribe tu dirección..."
-        @keydown.enter.prevent
-        autocomplete="off"
+    ref="inputRef"
+    type="text"
+    v-bind="$attrs"
+    :value="modelValue"
+    placeholder="Escribe tu dirección..."
+    autocomplete="off"
+    @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+    @keydown.enter.prevent
     />
 </template>
