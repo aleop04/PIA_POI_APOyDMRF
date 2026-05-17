@@ -2,10 +2,10 @@
 import { Form, Head, Link } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
+import AuthSplitLayoutLoginRegistro from '@/layouts/AuthSplitLayoutLoginRegistro.vue';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-import AuthSplitLayoutLoginRegistro from '@/layouts/AuthSplitLayoutLoginRegistro.vue';
 
 defineProps<{
     status?: string;

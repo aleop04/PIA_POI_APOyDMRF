@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import AppNavbar from '@/components/Destinarionavbar.vue';
-import AppFooter from '@/components/Destinariofooter.vue';
-import type { BreadcrumbItem } from '@/types';
 
 // socket 
 import { usePage } from '@inertiajs/vue3';
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
+import GlobalCallManager from '@/components/Calls/GlobalCallManager.vue';
+import AppFooter from '@/components/Destinariofooter.vue';
+import AppNavbar from '@/components/Destinarionavbar.vue';
 import { connectSocket } from '@/lib/socket';
+import type { BreadcrumbItem } from '@/types';
 
 const page = usePage();
+
+const socketReady = ref(false);
 
 onMounted(() => {
     const userId = page.props.auth?.user?.id;
 
     if (userId) {
         connectSocket(userId);
+        socketReady.value = true;
     }
 });
 
@@ -32,10 +36,12 @@ withDefaults(defineProps<Props>(), {
     <div class="min-h-screen flex flex-col bg-[#FFF1D9]">
         <AppNavbar />
 
-        <main class="flex-1 pt-[125px] relative">
+        <main class="relative flex-1 pt-[170px] md:pt-[125px]">
             <slot />
         </main>
 
         <AppFooter />
+
+        <GlobalCallManager v-if="socketReady" />
     </div>
 </template>

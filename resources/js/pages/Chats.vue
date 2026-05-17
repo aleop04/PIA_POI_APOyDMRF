@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 import ChatActionMenu from '@/components/Chats/ChatActionMenu.vue';
-import ChatWindow from '@/components/Chats/ChatWindow.vue';
 import ChatInfoPanel from '@/components/Chats/ChatInfoPanel.vue';
+import ChatWindow from '@/components/Chats/ChatWindow.vue';
 import UserAvatar from '@/components/UserAvatar.vue';
 
 //socket
@@ -63,6 +63,7 @@ const selectedUser = ref<User | null>(null);
 const selectedGroupUsers = ref<User[]>([]);
 const messages = ref<Message[]>([]);
 const showChatInfo = ref(false);
+const activeGroupCallConversationIds = ref<number[]>([]);
 
 async function openChat(conversation: Conversation) {
     await openConversation(conversation);
@@ -76,12 +77,39 @@ function getOtherUser(conversation: Conversation): User | null {
     return otherUser ?? conversation.users[0] ?? null;
 }
 
+function backToChatList() {
+    chatMode.value = 'empty';
+    showChatInfo.value = false;
+}
+
+function markGroupCallActive(conversationId: number) {
+    if (!activeGroupCallConversationIds.value.includes(conversationId)) {
+        activeGroupCallConversationIds.value.push(conversationId);
+    }
+}
+
+function markGroupCallInactive(conversationId: number) {
+    activeGroupCallConversationIds.value = activeGroupCallConversationIds.value.filter(
+        (id) => id !== conversationId,
+    );
+}
+
+function isGroupCallActive(conversationId: number | null | undefined) {
+    if (!conversationId) {
+        return false;
+    }
+
+    return activeGroupCallConversationIds.value.includes(Number(conversationId));
+}
+
 async function openConversationById(conversationId: number) {
     const conversation = conversationList.value.find(
         (c) => c.id === conversationId
     );
 
-    if (!conversation) return;
+    if (!conversation) {
+return;
+}
 
     await openConversation(conversation);
 }
@@ -95,6 +123,12 @@ async function openConversation(conversation: Conversation) {
         messages.value = data.messages ?? [];
 
         socket?.emit('join-chat', data.conversation.id);
+
+        if (data.conversation.type === 'group') {
+            socket?.emit('get-active-group-call', {
+                conversationId: data.conversation.id,
+            });
+        }
 
         if (data.conversation.type === 'group') {
             selectedGroupUsers.value = data.conversation.users;
@@ -114,11 +148,13 @@ async function openConversation(conversation: Conversation) {
 async function crearGrupo() {
     if (selectedGroupUsers.value.length < 2) {
         console.log('Selecciona al menos 2 usuarios');
+
         return;
     }
 
     if (selectedGroupUsers.value.length > 4) {
         console.log('Máximo 4 usuarios');
+
         return;
     }
 
@@ -150,7 +186,9 @@ async function crearGrupo() {
 }
 
 async function cambiarNombreGrupo(nuevoNombre: string) {
-    if (!selectedConversation.value) return;
+    if (!selectedConversation.value) {
+return;
+}
 
     try {
         const res = await axios.patch(
@@ -196,7 +234,9 @@ function openGroupChat(users: User[]) {
 function refreshSocketConnection() {
     socket = getSocket();
 
-    if (!socket) return;
+    if (!socket) {
+return;
+}
 
     if (!socket.connected) {
         socket.connect();
@@ -204,6 +244,7 @@ function refreshSocketConnection() {
 
     socket.emit('get-users-online');
     joinAllConversationRooms();
+    socket.emit('get-active-group-calls');
 }
 
 function appendMessageIfMissing(newMessage: Message) {
@@ -219,7 +260,9 @@ function updateConversationLastMessage(newMessage: Message) {
         (conversation) => conversation.id === newMessage.conversation_id,
     );
 
-    if (index === -1) return;
+    if (index === -1) {
+return;
+}
 
     const conversation = conversationList.value[index];
 
@@ -272,7 +315,9 @@ function addConversationIfMissing(conversation: Conversation) {
         (item) => item.id === conversation.id,
     );
 
-    if (exists) return;
+    if (exists) {
+return;
+}
 
     conversationList.value.unshift({
         ...conversation,
@@ -304,26 +349,53 @@ function handleMessageSent(newMessage: Message) {
 function getLastMessagePreview(conversation: Conversation) {
     const message = conversation.messages?.[0];
 
-    if (!message?.body) {
+    if (!message) {
         return 'Sin mensajes...';
     }
 
-    if (Number(message.sender_id) === Number(authUserId)) {
-        return `Tú: ${message.body}`;
+    let preview = '';
+
+    switch (message.type) {
+        case 'image':
+            preview = '📷 Foto';
+            break;
+
+        case 'audio':
+            preview = '🎤 Audio';
+            break;
+
+        case 'file':
+            preview = '📎 Archivo';
+            break;
+
+        case 'location':
+            preview = '📍 Ubicación';
+            break;
+
+        default:
+            preview = message.body ?? 'Sin mensajes...';
     }
 
-    return message.body;
+    if (Number(message.sender_id) === Number(authUserId)) {
+        return `Tú: ${preview}`;
+    }
+
+    return preview;
 }
 
 //sistema online offline desde sockets y last_seen_at en mi bd
 function isOnline(user: User | undefined | null) {
-    if (!user) return false;
+    if (!user) {
+return false;
+}
 
     return onlineUserIds.value.includes(Number(user.id));
 }
 
 function getLastSeenText(user: User | undefined | null) {
-    if (!user) return '';
+    if (!user) {
+return '';
+}
 
     if (isOnline(user)) {
         return 'Activo';
@@ -336,10 +408,16 @@ function getLastSeenText(user: User | undefined | null) {
     const diff = Date.now() - new Date(user.last_seen_at).getTime();
     const minutes = Math.floor(diff / 60000);
 
-    if (minutes < 1) return 'Últ. vez hace un momento';
-    if (minutes < 60) return `Últ. vez hace ${minutes} min`;
+    if (minutes < 1) {
+return 'Últ. vez hace un momento';
+}
+
+    if (minutes < 60) {
+return `Últ. vez hace ${minutes} min`;
+}
 
     const hours = Math.floor(minutes / 60);
+
     return `Últ. vez hace ${hours} h`;
 }
 
@@ -350,7 +428,9 @@ function handleVisibilityChange() {
 }
 
 function joinAllConversationRooms() {
-    if (!socket) return;
+    if (!socket) {
+return;
+}
 
     conversationList.value.forEach((conversation) => {
         socket?.emit('join-chat', conversation.id);
@@ -371,6 +451,7 @@ onMounted(async () => {
 
     socket?.emit('get-users-online');
     joinAllConversationRooms();
+    socket?.emit('get-active-group-calls');
 
     if (props.openConversationId) {
         await openConversationById(Number(props.openConversationId));
@@ -387,12 +468,28 @@ onMounted(async () => {
         updateConversationLastMessage(newMessage);
     });
 
+    socket?.on('active-group-calls', (calls: { conversationId: number }[]) => {
+        activeGroupCallConversationIds.value = calls.map((call) =>
+            Number(call.conversationId),
+        );
+    });
+
+    socket?.on('active-group-call-status', ({ conversationId, active }) => {
+        if (active) {
+            markGroupCallActive(Number(conversationId));
+        } else {
+            markGroupCallInactive(Number(conversationId));
+        }
+    });
+
     socket?.on('conversation-created', (conversation: Conversation) => {
         const belongsToMe = conversation.users.some(
             (user) => Number(user.id) === Number(authUserId),
         );
 
-        if (!belongsToMe) return;
+        if (!belongsToMe) {
+return;
+}
 
         addConversationIfMissing({
             ...conversation,
@@ -411,6 +508,14 @@ onMounted(async () => {
     socket?.on('conversation-updated', (updatedConversation: Conversation) => {
         updateConversationData(updatedConversation);
     });
+
+    socket?.on('group-call-user-joined', ({ conversationId }) => {
+        markGroupCallActive(Number(conversationId));
+    });
+
+    socket?.on('group-call-ended', ({ conversationId }) => {
+        markGroupCallInactive(Number(conversationId));
+    });
 });
 
 onBeforeUnmount(() => {
@@ -418,6 +523,12 @@ onBeforeUnmount(() => {
     socket?.off('receive-message');
     socket?.off('conversation-updated');
     socket?.off('conversation-created');
+
+    socket?.off('incoming-group-call');
+    socket?.off('group-call-user-joined');
+    socket?.off('group-call-ended');
+    socket?.off('active-group-calls');
+    socket?.off('active-group-call-status');
 
     window.removeEventListener('focus', refreshSocketConnection);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -428,17 +539,17 @@ onBeforeUnmount(() => {
 <template>
     <Head title="Chats" />
 
-    <section class="min-h-screen bg-[#FFF7EB] px-6 py-8">
-        <div class="flex w-full gap-7">
+    <section class="min-h-screen bg-[#FFF7EB] px-4 py-6 md:px-6 md:py-8">
+        <div class="flex w-full flex-col gap-6 xl:flex-row xl:gap-7">
             <!-- Panel izquierdo -->
-            <aside class="w-[333px] shrink-0">
+            <aside class="w-full shrink-0 xl:w-[333px]" :class="chatMode !== 'empty' ? 'hidden xl:block' : 'block'">
                 <!-- Encabezado Chats -->
                 <div
-                    class="flex h-[86px] w-full items-center justify-center rounded-[25px] border border-[#FFF7EB] bg-[#FF7608] px-[39px] py-[15px]"
+                    class="flex h-[76px] w-full items-center justify-center rounded-[25px] border border-[#FFF7EB] bg-[#FF7608] px-5 py-[15px] md:h-[86px] md:px-[39px]"
                 >
-                    <div class="flex h-[48px] w-[286px] items-end justify-between">
+                    <div class="flex w-full items-end justify-between md:h-[48px]">
                         <h1
-                            class="font-['Odor_Mean_Chey'] text-[48px] leading-none font-normal text-white"
+                            class="font-['Odor_Mean_Chey'] text-[38px] leading-none font-normal text-white md:text-[48px]"
                         >
                             Chats
                         </h1>
@@ -453,7 +564,7 @@ onBeforeUnmount(() => {
                 <!-- Si no hay chats -->
                 <div
                     v-if="conversationList.length === 0"
-                    class="mt-45 flex flex-col items-center gap-[17px]"
+                    class="mt-16 flex flex-col items-center gap-[17px] xl:mt-45"
                 >
                     <img
                         src="/images/nofound2.png"
@@ -462,19 +573,19 @@ onBeforeUnmount(() => {
                     />
 
                     <p
-                        class="h-[47px] w-[224px] text-center font-['Nunito_Sans'] text-[20px] font-bold text-[#B4C5BD]"
+                        class="w-[224px] text-center font-['Nunito_Sans'] text-[20px] font-bold text-[#B4C5BD]"
                     >
                         ¡No hay información que mostrar!
                     </p>
                 </div>
 
                 <!-- Lista de chats -->
-                <div v-else class="mt-6 flex flex-col gap-[30px]">
+                <div v-else class="invisible-scrollbar mt-6 flex max-h-[calc(100vh-260px)] flex-col gap-5 overflow-y-auto pr-1 md:gap-[30px]">
                     <button
                         v-for="conversation in conversationList"
                         :key="conversation.id"
                         type="button"
-                        class="cursor-pointer flex items-start gap-3"
+                        class="grid w-full cursor-pointer grid-cols-[44px_minmax(0,1fr)] gap-3 rounded-2xl p-2 text-left hover:bg-[#FFEBC9]/50"
                         @click="openConversation(conversation)"
                     >
                         <!-- Avatar -->
@@ -484,14 +595,14 @@ onBeforeUnmount(() => {
                                     ? conversation.photo
                                     : getOtherUser(conversation)?.profile_photo
                             "
-                            className="h-[44px] w-[44px] border-2 border-[#FFEBC9]"
+                            className="h-[44px] w-[44px] shrink-0 border-2 border-[#FFEBC9]"
                         />
 
                         <!-- CONTENIDO -->
-                        <div class="flex flex-col">
+                        <div class="min-w-0 w-full">
                             <!-- Nombre + estado -->
-                            <div class="flex items-center gap-3">
-                                <p class="max-w-[220px] truncate text-left font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <p class="min-w-0 truncate text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#442F2F] md:text-[24px]">
                                     {{
                                         conversation.type === 'group'
                                             ? conversation.name
@@ -502,7 +613,7 @@ onBeforeUnmount(() => {
                                 <!-- Estado -->
                                 <div
                                     v-if="conversation.type === 'private'"
-                                    class="flex items-center gap-2"
+                                    class="flex shrink-0 items-center gap-1"
                                 >
                                     <span
                                         class="h-[10px] w-[10px] rounded-full"
@@ -521,7 +632,7 @@ onBeforeUnmount(() => {
 
                             <!-- Último mensaje -->
                             <p
-                                class="max-w-[220px] mt-1 truncate text-left font-['Nunito_Sans'] text-[14px] text-[#442F2F]"
+                                class="mt-1 max-w-full truncate text-left font-['Nunito_Sans'] text-[14px] text-[#442F2F] xl:max-w-[220px]"
                             >
                                 {{ getLastMessagePreview(conversation) }}
                             </p>
@@ -531,29 +642,46 @@ onBeforeUnmount(() => {
             </aside>
 
             <!-- Panel principal chats -->
-            <ChatWindow
-                :mode="chatMode"
-                :selected-user="selectedUser"
-                :selected-group-users="selectedGroupUsers"
-                :selected-conversation="selectedConversation"
-                :messages="messages"
-                :online-user-ids="onlineUserIds"
-                @open-chat="openChat"
-                @open-group-chat="openGroupChat"
-                @create-group="crearGrupo"
-                @change-group-name="cambiarNombreGrupo"
-                @toggle-info="showChatInfo = !showChatInfo"
-                @message-sent="handleMessageSent"
-            />
+            <div class="min-w-0 flex-1" :class="chatMode === 'empty' || showChatInfo ? 'hidden xl:block' : 'block'">
+                <ChatWindow
+                    :mode="chatMode"
+                    :selected-user="selectedUser"
+                    :selected-group-users="selectedGroupUsers"
+                    :selected-conversation="selectedConversation"
+                    :messages="messages"
+                    :online-user-ids="onlineUserIds"
+                    :has-active-group-call="isGroupCallActive(selectedConversation?.id)"
+                    @open-chat="openChat"
+                    @open-group-chat="openGroupChat"
+                    @create-group="crearGrupo"
+                    @change-group-name="cambiarNombreGrupo"
+                    @toggle-info="showChatInfo = !showChatInfo"
+                    @message-sent="handleMessageSent"
+                    @back-to-list="backToChatList"
+                />
+            </div>
 
-            <ChatInfoPanel
-                v-if="showChatInfo"
-                :user="selectedUser"
-                :group-users="selectedGroupUsers"
-                :conversation="selectedConversation"
-                @group-name-updated="handleGroupNameUpdated"
-                @group-photo-updated="handleGroupPhotoUpdated"
-            />
+            <div v-if="showChatInfo" class="w-full shrink-0 xl:w-auto">
+
+                <ChatInfoPanel
+                    :user="selectedUser"
+                    :group-users="selectedGroupUsers"
+                    :conversation="selectedConversation"
+                    @group-name-updated="handleGroupNameUpdated"
+                    @group-photo-updated="handleGroupPhotoUpdated"
+                    @close-info="showChatInfo = false"
+                />
+            </div>
         </div>
     </section>
 </template>
+
+<style scoped>
+.invisible-scrollbar {
+    scrollbar-width: none;
+}
+
+.invisible-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+</style>

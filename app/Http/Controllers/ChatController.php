@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ChatController extends Controller
 {
@@ -49,7 +50,10 @@ class ChatController extends Controller
         );
 
         $messages = $conversation->messages()
-            ->with('sender:id,first_name,last_name,username,profile_photo')
+            ->with([
+                'sender:id,first_name,last_name,username,profile_photo',
+                'attachments',
+            ])
             ->oldest()
             ->get()
             ->map(function ($message) {
@@ -62,6 +66,12 @@ class ChatController extends Controller
                 } else {
                     $message->body = $message->body_encrypted;
                 }
+
+                $message->attachments->transform(function ($attachment) {
+                    $attachment->url = asset('storage/' . $attachment->file_path);
+
+                    return $attachment;
+                });
 
                 return $message;
             });
@@ -80,24 +90,104 @@ class ChatController extends Controller
         );
 
         $validated = $request->validate([
-            'body' => ['required', 'string'],
-            'type' => ['required', 'in:text,image,audio,file,location,system'],
+            'type' => ['required', 'in:text,image,file,audio,location'],
+
+            'body' => ['required_if:type,text', 'nullable', 'string'],
+
+            'lat' => ['required_if:type,location', 'numeric'],
+            'lng' => ['required_if:type,location', 'numeric'],
+
+            'image' => ['required_if:type,image', 'image', 'max:5120'],
+
+            'file' => [
+                'required_if:type,file',
+                'file',
+                'max:10240',
+            ],
+
+            'audio' => [
+                'required_if:type,audio',
+                'file',
+                'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/webm,audio/ogg,audio/mp4,audio/aac,video/webm,video/mp4',
+                'max:10240',
+            ],
         ]);
 
-        $encrypted = $this->encryptMessage($validated['body']);
+        $bodyToEncrypt = $validated['body'] ?? null;
+
+        if ($validated['type'] === 'location') {
+            $bodyToEncrypt = 'https://www.google.com/maps?q='
+                . $validated['lat']
+                . ','
+                . $validated['lng'];
+        }
+
+        $encrypted = null;
+
+        if ($bodyToEncrypt) {
+            $encrypted = $this->encryptMessage($bodyToEncrypt);
+        }
 
         $message = Message::create([
             'conversation_id' => $conversation->id,
             'sender_id' => Auth::id(),
             'type' => $validated['type'],
-            'body_encrypted' => $encrypted['ciphertext'],
-            'iv' => $encrypted['iv'],
-            'tag' => $encrypted['tag'],
+            'body_encrypted' => $encrypted['ciphertext'] ?? null,
+            'iv' => $encrypted['iv'] ?? null,
+            'tag' => $encrypted['tag'] ?? null,
         ]);
 
-        $message->load('sender:id,first_name,last_name,username,profile_photo');
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
 
-        $message->body = $validated['body'];
+            $path = $file->store('chat-images', 'public');
+
+            $message->attachments()->create([
+                'file_path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+
+            $path = $file->store('chat-files', 'public');
+
+            $message->attachments()->create([
+                'file_path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        if ($request->hasFile('audio')) {
+            $file = $request->file('audio');
+
+            $path = $file->store('chat-audios', 'public');
+
+            $message->attachments()->create([
+                'file_path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        }
+
+        $message->load([
+            'sender:id,first_name,last_name,username,profile_photo',
+            'attachments',
+        ]);
+
+        $message->body = $bodyToEncrypt;
+
+        $message->attachments->transform(function ($attachment) {
+            $attachment->url = asset('storage/' . $attachment->file_path);
+
+            return $attachment;
+        });
 
         return response()->json([
             'message' => $message,

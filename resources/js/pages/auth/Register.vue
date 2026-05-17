@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3'
+import { ref } from 'vue';
+import AddressAutocomplete from '@/components/AddressAutocomplete.vue';
 import InputError from '@/components/InputError.vue'
 import AuthSplitLayoutLoginRegistro from '@/layouts/AuthSplitLayoutLoginRegistro.vue'
 import { login } from '@/routes'
 import { store } from '@/routes/register'
-import AddressAutocomplete from '@/components/AddressAutocomplete.vue';
-import { ref } from 'vue';
 
+const locationText = ref('');
 
 type LocationForm = {
     formatted_address: string | null;
@@ -24,6 +25,7 @@ const selectedLocation = ref<LocationForm>({
 
 function handleLocationSelected(location: LocationForm) {
     selectedLocation.value = location;
+    locationText.value = location.formatted_address ?? '';
 }
 
 </script>
@@ -171,10 +173,11 @@ function handleLocationSelected(location: LocationForm) {
                 </label>
 
                 <div
-                    class="relative flex h-[39px] w-full items-center overflow-hidden rounded-[9px] border border-black/13 bg-white px-[10px] pr-[36px] transition focus-within:border-[#FF7608]"
+                    class="relative flex h-[39px] w-full items-center overflow-visible rounded-[9px] border border-black/13 bg-white px-[10px] pr-[36px] transition focus-within:border-[#FF7608]"
                 >
                     <AddressAutocomplete
                         id="location"
+                        v-model="locationText"
                         class="h-full w-full bg-transparent text-black placeholder:text-black/45 focus:outline-none"
                         @location-selected="handleLocationSelected"
                     />
@@ -196,7 +199,7 @@ function handleLocationSelected(location: LocationForm) {
                         </svg>
                     </div>
 
-                    <input type="hidden" name="formatted_address" :value="selectedLocation.formatted_address ?? ''" />
+                    <input type="hidden" name="formatted_address" :value="selectedLocation.formatted_address ?? locationText" />
                     <input type="hidden" name="lat" :value="selectedLocation.lat ?? ''" />
                     <input type="hidden" name="lng" :value="selectedLocation.lng ?? ''" />
                     <input type="hidden" name="place_id" :value="selectedLocation.place_id ?? ''" />

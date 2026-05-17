@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import ActiveChatPanel from '@/components/Chats/ActiveChatPanel.vue';
 import CreateGroupPanel from '@/components/Chats/CreateGroupPanel.vue';
 import SendMessagePanel from '@/components/Chats/SendMessagePanel.vue';
-import ActiveChatPanel from '@/components/Chats/ActiveChatPanel.vue';
 
 type User = {
     id: number;
@@ -40,6 +40,7 @@ defineProps<{
     selectedConversation: Conversation | null;
     messages: Message[];
     onlineUserIds: number[];
+    hasActiveGroupCall: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -49,25 +50,26 @@ const emit = defineEmits<{
     (e: 'change-group-name', name: string): void;
     (e: 'message-sent', message: Message): void;
     (e: 'toggle-info'): void;
+    (e: 'back-to-list'): void;
 }>();
 
 </script>
 
 <template>
     <main
-        class="h-[769px] flex-1 rounded-[15px] bg-[#FDF0D9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
+         class="relative h-[calc(100vh-430px)] min-h-[620px] w-full flex-1 overflow-hidden rounded-[15px] bg-[#FDF0D9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] lg:h-[769px]"
     >
-        <!-- Crear grupo -->
         <CreateGroupPanel
             v-if="mode === 'create-group'"
             @open-group-chat="emit('open-group-chat', $event as User[])"
             @create-group="emit('create-group')"
+            @back="$emit('back-to-list')"
         />
 
-        <!-- Enviar mensaje -->
         <SendMessagePanel
             v-else-if="mode === 'send-message'"
             @open-chat="emit('open-chat', $event as Conversation)"
+            @back="$emit('back-to-list')"
         />
 
         <ActiveChatPanel
@@ -77,13 +79,13 @@ const emit = defineEmits<{
             :conversation="selectedConversation"
             :messages="messages"
             :online-user-ids="onlineUserIds"
+            :has-active-group-call="hasActiveGroupCall"
             @change-group-name="emit('change-group-name', $event)"
             @message-sent="emit('message-sent', $event)"
             @toggle-info="emit('toggle-info')"
+            @back-to-list="emit('back-to-list')"
         />
 
-        <div v-else class="flex h-full items-center justify-center">
-           
-        </div>
+        <div v-else class="flex h-full items-center justify-center"></div>
     </main>
 </template>

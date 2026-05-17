@@ -4,19 +4,34 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const slides = [
     {
-        src: '/videos/video1.mp4',
+        src: '/images/1.jpg',
         title: 'Bienvenido a Destinario',
         text: 'Explora nuevos lugares, experiencias y comunidades.',
     },
     {
-        src: '/videos/video2.mp4',
+        src: '/images/2.jpg',
         title: 'Planea tus aventuras',
         text: 'Organiza destinos y actividades fácilmente.',
     },
     {
-        src: '/videos/video3.mp4',
+        src: '/images/3.jpg',
         title: 'Conecta con otros viajeros',
         text: 'Comparte experiencias únicas.',
+    },
+    {
+        src: '/images/4.jpg',
+        title: 'Descubre nuevos destinos',
+        text: 'Encuentra lugares ideales para tu próxima aventura.',
+    },
+    {
+        src: '/images/5.jpg',
+        title: 'Comparte tus experiencias',
+        text: 'Publica momentos y recomendaciones con la comunidad.',
+    },
+    {
+        src: '/images/6.jpg',
+        title: 'Viaja mejor acompañado',
+        text: 'Organiza planes y mantente conectado con otros viajeros.',
     },
 ];
 
@@ -45,7 +60,6 @@ onBeforeUnmount(() => {
     <Head title="Destinario" />
 
     <section class="min-h-screen bg-[#FFF7EA] p-8">
-        <!-- CARRUSEL GRANDE -->
         <div class="relative h-[430px] w-full overflow-hidden rounded-[28px] shadow-[0px_4px_12px_rgba(0,0,0,0.25)]">
             <div
                 v-for="(slide, index) in slides"
@@ -53,21 +67,15 @@ onBeforeUnmount(() => {
                 class="absolute inset-0 transition-opacity duration-700"
                 :class="index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'"
             >
-                <video
-                    v-if="index === currentSlide"
-                    :key="slide.src"
+                <img
                     :src="slide.src"
-                    autoplay
-                    muted
-                    loop
-                    playsinline
+                    :alt="slide.title"
                     class="h-full w-full object-cover"
-                ></video>
+                    loading="eager"
+                />
 
-                <!-- Capa oscura -->
                 <div class="absolute inset-0 bg-black/35"></div>
 
-                <!-- Texto -->
                 <div class="absolute bottom-12 left-12 max-w-[560px]">
                     <h1 class="font-['Nunito_Sans'] text-[44px] font-bold text-[#FF7608]">
                         {{ slide.title }}
@@ -79,7 +87,6 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <!-- Flecha izquierda -->
             <button
                 type="button"
                 @click="prevSlide"
@@ -88,7 +95,6 @@ onBeforeUnmount(() => {
                 ‹
             </button>
 
-            <!-- Flecha derecha -->
             <button
                 type="button"
                 @click="nextSlide"
@@ -97,7 +103,6 @@ onBeforeUnmount(() => {
                 ›
             </button>
 
-            <!-- Puntitos -->
             <div class="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-2">
                 <button
                     v-for="(_, index) in slides"
@@ -110,7 +115,6 @@ onBeforeUnmount(() => {
             </div>
         </div>
 
-        <!-- CONTENIDO DEBAJO -->
         <div class="mt-8">
             <!-- aquí después puedes poner publicaciones, tarjetas, recomendaciones, etc. -->
         </div>

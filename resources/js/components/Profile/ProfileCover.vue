@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps<{
     coverPhoto: string | null;
@@ -10,12 +10,16 @@ const props = defineProps<{
 const coverPreview = ref<string | null>(null);
 
 async function handleCoverPhoto(event: Event) {
-    if (props.readonly) return;
+    if (props.readonly) {
+return;
+}
 
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+return;
+}
 
     coverPreview.value = URL.createObjectURL(file);
 

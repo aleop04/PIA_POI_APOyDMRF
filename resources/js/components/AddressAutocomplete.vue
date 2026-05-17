@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 
 type SelectedLocation = {
     formatted_address: string | null;
@@ -26,8 +26,18 @@ const inputRef = ref<HTMLInputElement | null>(null);
 let autocomplete: google.maps.places.Autocomplete | null = null;
 let listener: google.maps.MapsEventListener | null = null;
 
+function updateValue() {
+    if (!inputRef.value) {
+        return;
+    }
+
+    emit('update:modelValue', inputRef.value.value);
+}
+
 onMounted(async () => {
-    if (!inputRef.value) return;
+    if (!inputRef.value) {
+        return;
+    }
 
     setOptions({
         key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
@@ -39,26 +49,32 @@ onMounted(async () => {
     autocomplete = new google.maps.places.Autocomplete(inputRef.value, {
         fields: ['formatted_address', 'geometry', 'place_id', 'name'],
         componentRestrictions: { country: 'mx' },
-        types: ['address'],
+        types: ['geocode'],
     });
 
     listener = autocomplete.addListener('place_changed', () => {
-        if (!autocomplete) return;
+        if (!autocomplete) {
+            return;
+        }
 
         const place = autocomplete.getPlace();
+        const address = place.formatted_address ?? place.name ?? '';
+
+        emit('update:modelValue', address);
 
         if (!place?.geometry?.location) {
             emit('location-selected', {
-                formatted_address: place?.formatted_address ?? null,
+                formatted_address: address || null,
                 lat: null,
                 lng: null,
                 place_id: place?.place_id ?? null,
             });
+
             return;
         }
 
         emit('location-selected', {
-            formatted_address: place.formatted_address ?? null,
+            formatted_address: address,
             lat: place.geometry.location.lat(),
             lng: place.geometry.location.lng(),
             place_id: place.place_id ?? null,
@@ -80,18 +96,20 @@ watch(
         }
     }
 );
-
 </script>
 
 <template>
     <input
-    ref="inputRef"
-    type="text"
-    v-bind="$attrs"
-    :value="modelValue"
-    placeholder="Escribe tu dirección..."
-    autocomplete="off"
-    @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-    @keydown.enter.prevent
+        ref="inputRef"
+        type="text"
+        v-bind="$attrs"
+        :value="modelValue"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        @input="updateValue"
+        @change="updateValue"
+        @keydown.enter="updateValue"
     />
 </template>

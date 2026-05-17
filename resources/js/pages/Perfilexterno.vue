@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
+import axios from 'axios';
 import ProfileCover from '@/components/Profile/ProfileCover.vue';
 
 type User = {
@@ -36,31 +37,14 @@ const props = defineProps<{
 
 async function sendMessage() {
     try {
-        const res = await fetch('/conversations/private', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN':
-                    document
-                        .querySelector('meta[name="csrf-token"]')
-                        ?.getAttribute('content') ?? '',
-                Accept: 'application/json',
-            },
-            body: JSON.stringify({
-                user_id: props.user.id,
-            }),
+        const res = await axios.post('/conversations/private', {
+            user_id: props.user.id,
         });
 
-        if (!res.ok) {
-            console.error(await res.json());
-            return;
-        }
-
-        const data = await res.json();
-
-        router.visit(`/chats?conversation=${data.conversation.id}`);
+        router.visit(`/chats?conversation=${res.data.conversation.id}`);
     } catch (error) {
         console.error(error);
+        alert('No se pudo abrir el chat.');
     }
 }
 </script>
@@ -71,9 +55,9 @@ async function sendMessage() {
     <section class="relative min-h-screen bg-[#FDF0D9]">
         <ProfileCover :cover-photo="user.cover_photo" readonly />
 
-        <div class="relative z-10 flex items-start gap-[68px] px-[55px] pb-[140px]">
+        <div class="relative z-10 flex flex-col items-center gap-8 px-4 pb-16 md:px-[55px] md:pb-[140px] lg:flex-row lg:items-start lg:gap-[68px]">
             <!-- CARD PERFIL EXTERNO -->
-            <div class="relative -mt-[73px] w-[333px] shrink-0 overflow-visible">
+            <div class="relative -mt-[73px] w-full max-w-[333px] shrink-0 overflow-visible">
                 <!-- FOTO PERFIL EXTERNO -->
                 <div
                     class="absolute left-1/2 top-[-55px] z-20 flex h-[110px] w-[110px] -translate-x-1/2 items-center justify-center overflow-hidden rounded-full bg-[#FF7608] outline outline-[6px] outline-[#FFEBC9]"
@@ -93,7 +77,7 @@ async function sendMessage() {
 
                 <!-- CARD -->
                 <aside
-                    class="relative flex h-[416px] w-[333px] flex-col items-center rounded-[94px] bg-[#00BF63] px-[38px] pt-[102px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
+                    class="relative flex h-[416px] w-full flex-col items-center rounded-[94px] bg-[#00BF63] px-[38px] pt-[102px] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
                 >
                     <h1
                         class="w-full mt-[-28px] truncate text-center font-['Nunito_Sans'] text-[32px] font-bold text-white"
@@ -134,7 +118,7 @@ async function sendMessage() {
             </div>
 
             <!-- CONTENIDO DERECHA -->
-            <main class="flex-1 pt-[40px]">
+            <main class="w-full flex-1 pt-0 lg:pt-[40px]">
                 <!-- INSIGNIAS -->
                 <section>
                     <h2 class="font-['Nunito_Sans'] text-[48px] font-bold text-[#FF7608]">

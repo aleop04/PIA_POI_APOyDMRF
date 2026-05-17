@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
 import axios from 'axios';
+import { ref, watch } from 'vue';
+import UserAvatar from '@/components/UserAvatar.vue';
 
 type User = {
     id: number;
@@ -8,6 +9,7 @@ type User = {
     last_name: string;
     username: string;
     last_seen_at: string | null;
+    profile_photo: string | null;
 };
 
 type Conversation = {
@@ -24,6 +26,7 @@ const users = ref<User[]>([]);
 
 const emit = defineEmits<{
     (e: 'open-chat', conversation: Conversation): void;
+    (e: 'back'): void;
 }>();
 
 watch(search, async (value) => {
@@ -31,6 +34,7 @@ watch(search, async (value) => {
 
     if (query.length < 1) {
         users.value = [];
+
         return;
     }
 
@@ -63,6 +67,15 @@ async function openChat(user: User) {
         <!-- Header -->
         <div class="flex h-[120px] w-full flex-col justify-center gap-4">
             <div class="flex items-center gap-[15px] px-[23px]">
+
+                <button
+                    type="button"
+                    class="text-[28px] font-bold text-[#FF7608] xl:hidden"
+                    @click="emit('back')"
+                >
+                    ←
+                </button>
+
                 <label
                     for="user-search"
                     class="text-center font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]"
@@ -95,13 +108,11 @@ async function openChat(user: User) {
                 class="flex items-center gap-[16px] text-left transition hover:opacity-75"
                 @click="openChat(user)"
             >
-                <div
-                    class="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full bg-[#FF7608] outline outline-2 outline-[#FFEBC9]"
-                >
-                    <span class="font-['Nunito_Sans'] text-[14px] font-bold text-white">
-                        {{ user.username.charAt(0) }}
-                    </span>
-                </div>
+                <UserAvatar
+                    :photo="user.profile_photo"
+                    :alt="user.username"
+                    className="h-[32px] w-[32px] shrink-0 outline outline-2 outline-[#FFEBC9]"
+                />
 
                 <span
                     class="w-[108px] truncate font-['Nunito_Sans'] text-[15px] font-bold text-[#442F2F]"

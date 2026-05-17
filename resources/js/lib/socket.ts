@@ -1,4 +1,5 @@
-import { io, Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
@@ -7,7 +8,9 @@ export function connectSocket(userId: number) {
         return socket;
     }
 
-    socket = io('http://localhost:3000', {
+    const socketUrl = window.location.origin;
+
+    socket = io(socketUrl, {
         auth: {
             userId,
         },

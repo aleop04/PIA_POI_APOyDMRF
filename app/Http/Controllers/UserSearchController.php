@@ -23,6 +23,8 @@ class UserSearchController extends Controller
                 'first_name',
                 'last_name',
                 'username',
+                'profile_photo',
+                'last_seen_at',
             ]);
 
         return response()->json($users);

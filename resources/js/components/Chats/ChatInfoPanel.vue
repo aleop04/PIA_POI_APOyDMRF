@@ -32,6 +32,7 @@ const authUserId = page.props.auth.user.id;
 const emit = defineEmits<{
     (e: 'group-name-updated', conversation: any): void;
     (e: 'group-photo-updated', conversation: any): void;
+    (e: 'close-info'): void;
 }>();
 
 const showMembers = ref(false);
@@ -62,13 +63,13 @@ function openTasksPanel() {
 }
 
 const showRenameModal = ref(false);
-const newGroupName = ref('');
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
 function goToProfile(userId: number) {
     if (Number(userId) === Number(authUserId)) {
         router.visit('/perfil');
+
         return;
     }
 
@@ -84,7 +85,9 @@ function closeRenameModal() {
 }
 
 async function saveGroupName(name: string) {
-    if (!props.conversation) return;
+    if (!props.conversation) {
+        return;
+    }
 
     const res = await fetch(`/conversations/${props.conversation.id}/name`, {
         method: 'PATCH',
@@ -113,7 +116,9 @@ async function changeGroupPhoto(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
 
-    if (!file || !props.conversation) return;
+    if (!file || !props.conversation) {
+        return;
+    }
 
     const formData = new FormData();
     formData.append('photo', file);
@@ -140,16 +145,26 @@ async function changeGroupPhoto(event: Event) {
 
 <template>
     <aside
-        class="relative h-[769px] w-[317px] shrink-0 rounded-[15px] bg-[#FDF0D9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
+        class="relative h-[calc(100vh-430px)] min-h-[620px] w-full shrink-0 overflow-hidden rounded-[15px] bg-[#FDF0D9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] xl:h-[769px] xl:w-[317px]"
     >
+
+        <button
+            v-if="!showTasksPanel"
+            type="button"
+            class="absolute left-[27px] top-[24px] z-20 text-[32px] font-bold text-[#FF7608] xl:hidden"
+            @click="emit('close-info')"
+        >
+            ←
+        </button>
+
         <!-- CHAT PRIVADO -->
         <div
             v-if="conversation?.type === 'private'"
-            class="absolute left-[115px] top-[31px] flex w-[88px] flex-col items-center gap-[9px]"
+            class="flex h-full w-full flex-col items-center px-[28px] pt-[31px]"
         >
             <button
                 type="button"
-                class="flex flex-col items-center gap-[9px]"
+                class="flex w-full max-w-[420px] flex-col items-center gap-[9px]"
                 @click="user && goToProfile(user.id)"
             >
                 <UserAvatar
@@ -169,123 +184,126 @@ async function changeGroupPhoto(event: Event) {
         <template v-else-if="conversation?.type === 'group'">
             <div
                 v-if="!showTasksPanel"
-                class="absolute left-[18px] top-[31px] flex w-[281px] flex-col items-center gap-[70px]"
+                class="flex h-full w-full flex-col items-center px-[28px] pt-[31px]"
             >
-                <!-- Header grupo -->
-                <div class="flex w-[101px] flex-col items-center justify-center gap-[9px]">
-                    <UserAvatar
-                        :photo="conversation?.photo"
-                        className="h-[71px] w-[71px] outline outline-2 outline-[#FFEBC9]"
-                    />
 
-                    <h2
-                        class="w-[160px] truncate text-center font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]"
-                    >
-                        {{ chatTitle || 'Grupo' }}
-                    </h2>
-                </div>
-
-                <!-- Opciones grupo -->
-                <div class="flex w-full flex-col items-start gap-[12px]">
-                    <!-- Miembros -->
-                    <button
-                        type="button"
-                        class="cursor-pointer flex h-[25px] w-full items-start justify-center gap-[74px]"
-                        @click="toggleMembers"
-                    >
-                        <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
-                            Miembros del chat
-                        </span>
-
-                        <img
-                            :src="showMembers ? '/icons/Chevron up.svg' : '/icons/Chevron down.svg'"
-                            alt="Abrir miembros"
-                            class="h-[25px] w-[25px]"
+            <div class="w-full max-w-[420px] xl:max-w-[281px]">
+                    <!-- Header grupo -->
+                    <div class="flex w-full flex-col items-center justify-center gap-[9px]">
+                        <UserAvatar
+                            :photo="conversation?.photo"
+                            className="h-[71px] w-[71px] outline outline-2 outline-[#FFEBC9]"
                         />
-                    </button>
 
-                    <div v-if="showMembers" class="flex flex-col gap-[17px]">
-                        <button
-                            v-for="member in groupUsers"
-                            :key="member.id"
-                            type="button"
-                            class="flex items-center gap-[13px] text-left"
-                            @click="goToProfile(member.id)"
+                        <h2
+                            class="w-[160px] truncate text-center font-['Nunito_Sans'] text-[24px] font-bold text-[#442F2F]"
                         >
-                            <UserAvatar
-                                :photo="member.profile_photo"
-                                className="cursor-pointer h-[32px] w-[32px] outline outline-2 outline-[#FFEBC9]"
-                            />
-
-                            <span class="cursor-pointer text-[20px] font-bold text-[#442F2F]">
-                                {{ member.username }}
-                            </span>
-                        </button>
+                            {{ chatTitle || 'Grupo' }}
+                        </h2>
                     </div>
 
-                    <!-- Personalizar -->
-                    <button
-                        type="button"
-                        class="cursor-pointer flex h-[25px] w-full items-center justify-center gap-[74px]"
-                        @click="toggleCustomize"
-                    >
-                        <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
-                            Personalizar el chat
-                        </span>
-
-                        <img
-                            :src="showCustomize ? '/icons/Chevron up.svg' : '/icons/Chevron down.svg'"
-                            alt="Abrir personalización"
-                            class="h-[25px] w-[25px]"
-                        />
-                    </button>
-
-                    <div v-if="showCustomize" class="mt-8 flex w-full flex-col gap-[7px]">
+                    <!-- Opciones grupo -->
+                    <div class="mt-[70px] flex w-full flex-col items-start gap-[12px] xl:mt-[70px]">
+                        <!-- Miembros -->
                         <button
                             type="button"
-                            class="flex items-center gap-[7px] text-left transition hover:opacity-80"
-                            @click="openRenameModal"
+                            class="cursor-pointer flex h-[25px] w-full items-center justify-between"
+                            @click="toggleMembers"
                         >
-                            <img src="/icons/Edit2.svg" alt="Cambiar nombre" class="h-[32px] w-[32px]" />
-
-                            <span class="font-['Nunito_Sans'] text-[20px] font-bold text-[#442F2F]">
-                                Cambiar nombre del chat
+                            <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
+                                Miembros del chat
                             </span>
+
+                            <img
+                                :src="showMembers ? '/icons/Chevron up.svg' : '/icons/Chevron down.svg'"
+                                alt="Abrir miembros"
+                                class="h-[25px] w-[25px]"
+                            />
                         </button>
 
+                        <div v-if="showMembers" class="flex flex-col gap-[17px]">
+                            <button
+                                v-for="member in groupUsers"
+                                :key="member.id"
+                                type="button"
+                                class="flex items-center gap-[13px] text-left"
+                                @click="goToProfile(member.id)"
+                            >
+                                <UserAvatar
+                                    :photo="member.profile_photo"
+                                    className="cursor-pointer h-[32px] w-[32px] outline outline-2 outline-[#FFEBC9]"
+                                />
+
+                                <span class="cursor-pointer text-[20px] font-bold text-[#442F2F]">
+                                    {{ member.username }}
+                                </span>
+                            </button>
+                        </div>
+
+                        <!-- Personalizar -->
                         <button
                             type="button"
-                            class="flex items-center gap-[7px] text-left transition hover:opacity-80"
-                            @click="openPhotoSelector"
+                            class="cursor-pointer flex h-[25px] w-full items-center justify-between"
+                            @click="toggleCustomize"
                         >
-                            <input
-                                ref="fileInputRef"
-                                type="file"
-                                accept="image/*"
-                                class="hidden"
-                                @change="changeGroupPhoto"
-                            />
-
-                            <img src="/icons/Image.svg" alt="Cambiar foto" class="h-[32px] w-[32px]" />
-
-                            <span class="font-['Nunito_Sans'] text-[20px] font-bold text-[#442F2F]">
-                                Cambiar foto de grupo
+                            <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
+                                Personalizar el chat
                             </span>
+
+                            <img
+                                :src="showCustomize ? '/icons/Chevron up.svg' : '/icons/Chevron down.svg'"
+                                alt="Abrir personalización"
+                                class="h-[25px] w-[25px]"
+                            />
+                        </button>
+
+                        <div v-if="showCustomize" class="mt-8 flex w-full flex-col gap-[7px]">
+                            <button
+                                type="button"
+                                class="flex items-center gap-[7px] text-left transition hover:opacity-80"
+                                @click="openRenameModal"
+                            >
+                                <img src="/icons/Edit2.svg" alt="Cambiar nombre" class="h-[32px] w-[32px]" />
+
+                                <span class="font-['Nunito_Sans'] text-[20px] font-bold text-[#442F2F]">
+                                    Cambiar nombre del chat
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="flex items-center gap-[7px] text-left transition hover:opacity-80"
+                                @click="openPhotoSelector"
+                            >
+                                <input
+                                    ref="fileInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    class="sr-only"
+                                    @change="changeGroupPhoto"
+                                />
+
+                                <img src="/icons/Image.svg" alt="Cambiar foto" class="h-[32px] w-[32px]" />
+
+                                <span class="font-['Nunito_Sans'] text-[20px] font-bold text-[#442F2F]">
+                                    Cambiar foto de grupo
+                                </span>
+                            </button>
+                        </div>
+
+                        <!-- Tareas grupales -->
+                        <button
+                            type="button"
+                            class="mt-[34px] flex h-[25px] w-full items-center justify-between"
+                            @click="openTasksPanel"
+                        >
+                            <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
+                                Tareas grupales
+                            </span>
+
+                            <img src="/icons/Chevron right.svg" alt="Abrir tareas" class="h-[25px] w-[25px]" />
                         </button>
                     </div>
-
-                    <!-- Tareas grupales -->
-                    <button
-                        type="button"
-                        class="mt-[34px] flex h-[25px] w-full items-center justify-center gap-[74px]"
-                        @click="openTasksPanel"
-                    >
-                        <span class="h-[25px] w-[184px] text-left font-['Nunito_Sans'] text-[20px] font-bold text-[#FF7608]">
-                            Tareas grupales
-                        </span>
-
-                        <img src="/icons/Chevron right.svg" alt="Abrir tareas" class="h-[25px] w-[25px]" />
-                    </button>
                 </div>
             </div>
 

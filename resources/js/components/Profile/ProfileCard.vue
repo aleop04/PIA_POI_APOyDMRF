@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
 import AddressAutocomplete from '@/components/AddressAutocomplete.vue';
 
 type User = {
@@ -53,7 +53,9 @@ async function handleProfilePhoto(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+return;
+}
 
     const formData = new FormData();
     formData.append('profile_photo', file);
@@ -89,6 +91,7 @@ async function updateProfile() {
         const error = await res.json();
         console.error('ERROR AL ACTUALIZAR PERFIL:', error);
         alert(Object.values(error.errors ?? {}).flat().join('\n'));
+
         return;
     }
 
@@ -97,7 +100,9 @@ async function updateProfile() {
 }
 
 async function deleteProfile() {
-    if (!confirm('¿Seguro que quieres eliminar tu perfil?')) return;
+    if (!confirm('¿Seguro que quieres eliminar tu perfil?')) {
+return;
+}
 
     await fetch('/perfil', {
         method: 'DELETE',
