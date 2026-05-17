@@ -66,15 +66,15 @@ test('password can be reset with valid token', function () {
             $response = $this->post('/reset-password', [
                 'token' => $notification->token,
                 'email' => $user->email,
-                'password' => 'NewPassword123!',
-                'password_confirmation' => 'NewPassword123!',
+                'password' => 'Zx9!vQ2@mL7#pR4$',
+                'password_confirmation' => 'Zx9!vQ2@mL7#pR4$',
             ]);
 
             $response
                 ->assertSessionHasNoErrors()
                 ->assertRedirect(route('login'));
 
-            expect(Hash::check('NewPassword123!', $user->refresh()->password))->toBeTrue();
+            expect(Hash::check('Zx9!vQ2@mL7#pR4$', $user->refresh()->password))->toBeTrue();
 
             return true;
         }
@@ -87,8 +87,8 @@ test('password cannot be reset with invalid token', function () {
     $response = $this->post('/reset-password', [
         'token' => 'invalid-token',
         'email' => $user->email,
-        'password' => 'NewPassword123!',
-        'password_confirmation' => 'NewPassword123!',
+        'password' => 'Zx9!vQ2@mL7#pR4$',
+        'password_confirmation' => 'Zx9!vQ2@mL7#pR4$',
     ]);
 
     $response->assertSessionHasErrors('email');

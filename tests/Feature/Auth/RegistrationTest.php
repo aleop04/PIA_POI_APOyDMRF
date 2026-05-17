@@ -22,8 +22,8 @@ test('new users can register', function () {
         'lat' => 24.0248409,
         'lng' => -104.6608131,
         'place_id' => 'test-place-id',
-        'password' => 'Password123!',
-        'password_confirmation' => 'Password123!',
+        'password' => 'Zx9!vQ2@mL7#pR4$',
+        'password_confirmation' => 'Zx9!vQ2@mL7#pR4$',
     ]);
 
     $this->assertAuthenticated();
