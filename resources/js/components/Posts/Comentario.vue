@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { router } from '@inertiajs/vue3'
+import { ref } from 'vue'
 
 interface CommentUser {
     id: number;
@@ -30,10 +30,13 @@ const emit = defineEmits<{
 const menuOpen = ref(false);
 
 function goToUserProfile(userId?: number) {
-    if (!userId) return
+    if (!userId) {
+return
+}
 
     if (userId === props.authUserId) {
         router.visit('/perfil')
+
         return
     }
 

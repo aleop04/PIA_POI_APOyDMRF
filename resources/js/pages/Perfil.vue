@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import CardPublicacion from '@/components/Posts/CardPublicacion.vue';
 import ProfileCard from '@/components/Profile/ProfileCard.vue';
 import ProfileCover from '@/components/Profile/ProfileCover.vue';
 import ProfileSection from '@/components/Profile/ProfileSection.vue';
-import CardPublicacion from '@/components/Posts/CardPublicacion.vue';
 
 type User = {
     id: number;

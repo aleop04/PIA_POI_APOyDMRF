@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3'
-import Comentario from '@/components/Posts/Comentario.vue'
 import axios from 'axios'
 import { ref, computed } from 'vue'
+import Comentario from '@/components/Posts/Comentario.vue'
 import {
   Dialog,
   DialogContent,
@@ -159,10 +159,13 @@ function closePhotoPreview() {
 }
 
 function goToUserProfile(userId?: number) {
-    if (!userId) return
+    if (!userId) {
+return
+}
 
     if (userId === props.authUserId) {
         router.visit('/perfil')
+
         return
     }
 
@@ -203,14 +206,18 @@ const dayLabels: Record<string, string> = {
 }
 
 function formatDuration(from: string | null, to: string | null): string | null {
-  if (!from || !to) return null
+  if (!from || !to) {
+return null
+}
 
   const [sh, sm] = from.split(':').map(Number)
   const [eh, em] = to.split(':').map(Number)
 
   const mins = eh * 60 + em - (sh * 60 + sm)
 
-  if (mins <= 0) return null
+  if (mins <= 0) {
+return null
+}
 
   const h = Math.floor(mins / 60)
   const m = mins % 60
@@ -238,6 +245,7 @@ async function enviarComentario() {
         if (editingCommentId.value) {
             if (!nuevoComentario.value.trim()) {
                 alert('El comentario no puede estar vacío.')
+
                 return
             }
 
@@ -264,6 +272,7 @@ async function enviarComentario() {
             if (nuevoComentario.value.trim()) {
                 if (userOwnComment.value) {
                     alert('Ya comentaste esta publicación. Puedes editar o eliminar tu comentario.')
+
                     return
                 }
 
@@ -297,7 +306,9 @@ async function enviarComentario() {
 async function deleteComment(comment: PostComment) {
     const confirmed = confirm('¿Eliminar este comentario?')
 
-    if (!confirmed) return
+    if (!confirmed) {
+return
+}
 
     try {
         const { data } = await axios.delete(

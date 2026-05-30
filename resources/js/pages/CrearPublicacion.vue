@@ -80,11 +80,13 @@ function openConfirmDialog() {
 
     if (!activityName.value.trim()) {
         alert('Debes agregar un título.');
+
         return;
     }
 
     if (!description.value.trim()) {
         alert('Debes agregar una descripción.');
+
         return;
     }
 
@@ -116,7 +118,9 @@ function handleImageUpload(event: Event) {
 
     const input = event.target as HTMLInputElement;
 
-    if (!input.files) return;
+    if (!input.files) {
+return;
+}
 
     const files = Array.from(input.files);
 
@@ -131,6 +135,7 @@ function handleImageUpload(event: Event) {
         }, 3000);
 
         input.value = '';
+
         return;
     }
 
@@ -181,7 +186,9 @@ function removeImage(id: number) {
 
     const index = images.value.findIndex((img) => img.id === id);
 
-    if (index === -1) return;
+    if (index === -1) {
+return;
+}
 
     URL.revokeObjectURL(images.value[index].url);
 
