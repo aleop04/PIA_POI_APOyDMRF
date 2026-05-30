@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\GroupTask;
 
 class Conversation extends Model
 {
@@ -29,4 +31,10 @@ class Conversation extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     } 
+
+    public function groupTasks(): HasMany
+    {
+        return $this->hasMany(GroupTask::class);
+    }
+
 }

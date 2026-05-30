@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+// importamos socket.io
 const { Server } = require("socket.io");
 
+// creacion de servidor en puerto 3000. el proxy en 8080 redirige peticiones de socket.io a este servidor
 const io = new Server(3000, {
     cors: {
         origin: "*",
@@ -9,9 +11,12 @@ const io = new Server(3000, {
     },
 });
 
+// usuarios conectados actualmente
 const onlineUsers = new Map();
+
 const groupCallSockets = new Map();
 const activeGroupCalls = new Map();
+const activeGroupCallTypes = new Map();
 
 function emitOnlineUsers(socket = null) {
     const onlineIds = Array.from(onlineUsers.keys());
@@ -36,6 +41,7 @@ function emitGroupCallParticipants(callId) {
 io.on("connection", (socket) => {
     console.log("Auth recibido:", socket.handshake.auth);
 
+    // obtencion de id de usuario conectado
     const userId = socket.handshake.auth.userId;
 
     console.log("Usuario conectado:", socket.id, "User ID:", userId);
@@ -127,9 +133,12 @@ io.on("connection", (socket) => {
 
     //
 
-    // llamadas de voz grupales
+    // llamadas de voz + video grupales
     socket.on("group-call-user", ({ toUserIds, fromUser, conversationId, callType, group }) => {
         const callId = Number(conversationId);
+        const normalizedCallType = callType === "video" ? "video" : "voice";
+
+        activeGroupCallTypes.set(callId, normalizedCallType);
 
         const targetUserIds = toUserIds
             .map((id) => Number(id))
@@ -138,12 +147,13 @@ io.on("connection", (socket) => {
         io.to(`chat-${callId}`).emit("active-group-call-status", {
             conversationId: callId,
             active: true,
+            callType: normalizedCallType,
         });
 
         io.to(`chat-${callId}`).emit("incoming-group-call", {
             fromUser,
             conversationId: callId,
-            callType,
+            callType: normalizedCallType,
             group,
             toUserIds: targetUserIds,
         });
@@ -156,6 +166,7 @@ io.on("connection", (socket) => {
             if (participants.size > 0) {
                 calls.push({
                     conversationId: Number(conversationId),
+                    callType: activeGroupCallTypes.get(Number(conversationId)) ?? "voice",
                     participants: Array.from(participants.values()),
                 });
             }
@@ -169,8 +180,9 @@ io.on("connection", (socket) => {
         const participants = activeGroupCalls.get(callId);
 
         socket.emit("active-group-call-status", {
-            conversationId: Number(conversationId),
+            conversationId: callId,
             active: !!participants && participants.size > 0,
+            callType: activeGroupCallTypes.get(callId) ?? "voice",
             participants: participants ? Array.from(participants.values()) : [],
         });
     });
@@ -301,6 +313,7 @@ io.on("connection", (socket) => {
 
             activeGroupCalls.delete(callId);
             groupCallSockets.delete(callId);
+            activeGroupCallTypes.delete(callId);
         }
 
         socket.leave(room);
@@ -358,6 +371,7 @@ io.on("connection", (socket) => {
 
                 activeGroupCalls.delete(callId);
                 groupCallSockets.delete(callId);
+                activeGroupCallTypes.delete(callId);
             }
 
             socket.leave(room);

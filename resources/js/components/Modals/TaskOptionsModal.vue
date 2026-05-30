@@ -1,28 +1,120 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 
-type GroupTask = {
-    id: string;
-    text: string;
-    completed: boolean;
-};
+const props = defineProps<{
+    conversationId: number;
+}>();
 
 const emit = defineEmits<{
     (e: 'close'): void;
-    (e: 'select-task', task: GroupTask): void;
+    (e: 'task-created'): void;
 }>();
 
+type TaskOption = {
+    label: string;
+    description: string;
+    type: 'comment_and_review' | 'publish' | 'send_messages';
+    required_amount: number;
+    points: number;
+};
+
+const creating = ref(false);
+const errorMessage = ref('');
+
+const taskOptions: TaskOption[] = [
+    {
+        label: '10 puntos x 3 reseñas en distintas publicaciones',
+        description: '3 reseñas en distintas publicaciones',
+        type: 'comment_and_review',
+        required_amount: 3,
+        points: 10,
+    },
+    {
+        label: '20 puntos x 6 reseñas en distintas publicaciones',
+        description: '6 reseñas en distintas publicaciones',
+        type: 'comment_and_review',
+        required_amount: 6,
+        points: 20,
+    },
+    {
+        label: '30 puntos x 1 publicación nueva',
+        description: '1 publicación nueva',
+        type: 'publish',
+        required_amount: 1,
+        points: 30,
+    },
+    {
+        label: '40 puntos x enviar 10 mensajes en el chat grupal',
+        description: 'enviar 10 mensajes en el chat grupal',
+        type: 'send_messages',
+        required_amount: 10,
+        points: 40,
+    },
+    {
+        label: '50 puntos x 2 publicaciones nuevas',
+        description: '2 publicaciones nuevas',
+        type: 'publish',
+        required_amount: 2,
+        points: 50,
+    },
+];
+
 function close() {
+    if (creating.value) {
+        return;
+    }
+
     emit('close');
 }
 
-function selectTask(id: string, text: string) {
-    emit('select-task', {
-        id,
-        text,
-        completed: false,
-    });
+function csrfToken() {
+    return document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute('content') ?? '';
 }
 
+async function selectTask(task: TaskOption) {
+    if (creating.value) {
+        return;
+    }
+
+    creating.value = true;
+    errorMessage.value = '';
+
+    try {
+        const res = await fetch(`/chats/${props.conversationId}/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                description: task.description,
+                type: task.type,
+                required_amount: task.required_amount,
+                points: task.points,
+            }),
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+
+            throw new Error(
+                data?.message ?? 'No se pudo crear la tarea grupal.',
+            );
+        }
+
+        emit('task-created');
+    } catch (error) {
+        console.error(error);
+        errorMessage.value = error instanceof Error
+            ? error.message
+            : 'No se pudo crear la tarea grupal.';
+    } finally {
+        creating.value = false;
+    }
+}
 </script>
 
 <template>
@@ -32,7 +124,7 @@ function selectTask(id: string, text: string) {
     >
         <!-- Modal -->
         <div
-            class="relative max-h-[85vh] w-full max-w-[683px] overflow-y-auto rounded-[32px] bg-[#FFFBED] px-5 py-6 shadow-[0px_15px_4px_rgba(0,0,0,0.25)] md:h-[664px] md:w-[683px] md:rounded-[65px] md:px-[65px] md:pt-[17px] md:pb-[57px]"
+            class="scrollbar-thin relative max-h-[85vh] w-full max-w-[683px] overflow-y-auto rounded-[32px] bg-[#FFFBED] px-5 py-6 shadow-[0px_15px_4px_rgba(0,0,0,0.25)] md:h-[664px] md:w-[683px] md:rounded-[65px] md:px-[65px] md:pt-[17px] md:pb-[57px]"
         >
             <!-- Header -->
             <div class="flex items-start justify-between gap-3 md:justify-center md:gap-[28px]">
@@ -51,7 +143,12 @@ function selectTask(id: string, text: string) {
                 </h2>
 
                 <!-- Botón cerrar -->
-                <button @click="close" class="shrink-0">
+                <button
+                    type="button"
+                    class="shrink-0"
+                    :disabled="creating"
+                    @click="close"
+                >
                     <img
                         src="/icons/X circle.svg"
                         alt="Cerrar"
@@ -63,81 +160,35 @@ function selectTask(id: string, text: string) {
             <!-- Línea -->
             <div class="mt-5 h-[1px] w-full bg-[#442F2F] md:mt-[21px]" />
 
+            <p
+                v-if="errorMessage"
+                class="mt-4 rounded-[14px] bg-red-100 px-4 py-2 text-center text-[14px] font-bold text-red-700"
+            >
+                {{ errorMessage }}
+            </p>
+
             <!-- Lista de tareas -->
             <div
                 class="mt-6 flex max-h-[55vh] flex-col gap-5 overflow-y-auto pr-1 scrollbar-thin md:mt-[46px] md:max-h-[420px] md:gap-[36px] md:pr-2"
             >
-
-                <!-- Tarea 1 -->
-                <div class="flex items-center justify-between gap-4">
+                <div
+                    v-for="task in taskOptions"
+                    :key="task.label"
+                    class="flex items-center justify-between gap-4"
+                >
                     <p class="flex-1 text-[16px] font-bold text-[#AF6123] md:w-[363px] md:flex-none md:text-[24px]">
-                        10 puntos x 3 reseñas en distintas publicaciones
+                        {{ task.label }}
                     </p>
 
                     <button
-                        @click="selectTask('reseñas-3', '10 puntos x 3 reseñas en distintas publicaciones')"
-                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 md:h-[42px] md:w-[99px] md:text-[16px]"
+                        type="button"
+                        :disabled="creating"
+                        @click="selectTask(task)"
+                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 md:h-[42px] md:w-[99px] md:text-[16px]"
                     >
-                        Agregar
+                        {{ creating ? '...' : 'Agregar' }}
                     </button>
                 </div>
-
-                <!-- Tarea 2 -->
-                <div class="flex items-center justify-between gap-4">
-                    <p class="flex-1 text-[16px] font-bold text-[#AF6123] md:w-[363px] md:flex-none md:text-[24px]">
-                        20 puntos x 6 reseñas en distintas publicaciones
-                    </p>
-
-                    <button
-                        @click="selectTask('reseñas-6', '20 puntos x 6 reseñas en distintas publicaciones')"
-                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 md:h-[42px] md:w-[99px] md:text-[16px]"
-                    >
-                        Agregar
-                    </button>
-                </div>
-
-                <!-- Tarea 3 -->
-                <div class="flex items-center justify-between gap-4">
-                    <p class="flex-1 text-[16px] font-bold text-[#AF6123] md:w-[363px] md:flex-none md:text-[24px]">
-                        30 puntos x 1 publicación nueva
-                    </p>
-
-                    <button
-                        @click="selectTask('post-1', '30 puntos x 1 publicación nueva')"
-                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 md:h-[42px] md:w-[99px] md:text-[16px]"
-                    >
-                        Agregar
-                    </button>
-                </div>
-
-                <!-- Tarea 4 -->
-                <div class="flex items-center justify-between gap-4">
-                    <p class="flex-1 text-[16px] font-bold text-[#AF6123] md:w-[363px] md:flex-none md:text-[24px]">
-                        40 puntos x enviar 10 mensajes en el chat grupal
-                    </p>
-
-                    <button
-                        @click="selectTask('mensajes-10', '40 puntos x enviar 10 mensajes en el chat grupal')"
-                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 md:h-[42px] md:w-[99px] md:text-[16px]"
-                    >
-                        Agregar
-                    </button>
-                </div>
-
-                <!-- Tarea 5 -->
-                <div class="flex items-center justify-between gap-4">
-                    <p class="flex-1 text-[16px] font-bold text-[#AF6123] md:w-[363px] md:flex-none md:text-[24px]">
-                        50 puntos x 2 publicaciones nuevas
-                    </p>
-
-                    <button
-                        @click="selectTask('post-2', '50 puntos x 2 publicaciones nuevas')"
-                        class="h-[36px] w-[86px] shrink-0 rounded-[50px] bg-[#FF0808] text-[14px] font-semibold text-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)] transition hover:opacity-80 md:h-[42px] md:w-[99px] md:text-[16px]"
-                    >
-                        Agregar
-                    </button>
-                </div>
-
             </div>
         </div>
     </div>

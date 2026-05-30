@@ -309,6 +309,7 @@ async function changeGroupPhoto(event: Event) {
 
             <GroupTasksPanel
                 v-else
+                :conversation-id="conversation.id"
                 @back="showTasksPanel = false"
             />
 

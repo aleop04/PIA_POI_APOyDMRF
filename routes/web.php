@@ -12,7 +12,9 @@ use App\Http\Controllers\SocketUserController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use App\Http\Controllers\DestinarioPerfilController;
 use App\Http\Controllers\PerfilExternoController;
-
+use App\Http\Controllers\PostController;
+use App\Http\Controllers\GroupTaskController;
+use App\Http\Controllers\RewardController;
 
 
 
@@ -27,35 +29,70 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('/dashboard', 'Dashboard')->name('dashboard');
+    Route::get('/dashboard', [PostController::class, 'dashboard'])
+        ->name('dashboard');
 
     // Perfil
     Route::get('/perfil', [DestinarioPerfilController::class, 'show'])->name('perfil');
     Route::patch('/perfil', [DestinarioPerfilController::class, 'update'])
-    ->name('perfil.update');
+        ->name('perfil.update');
     Route::post('/perfil/profile-photo', [DestinarioPerfilController::class, 'updateProfilePhoto'])
-    ->name('perfil.profile-photo');
+        ->name('perfil.profile-photo');
     Route::post('/perfil/cover-photo', [DestinarioPerfilController::class, 'updateCoverPhoto'])
-    ->name('perfil.cover-photo');
+        ->name('perfil.cover-photo');
     Route::delete('/perfil', [DestinarioPerfilController::class, 'destroy'])
-    ->name('perfil.destroy');
+        ->name('perfil.destroy');
 
     // Perfil externo
     Route::get('/usuarios/{user}', [PerfilExternoController::class, 'show'])
     ->name('usuarios.show');
 
-    Route::inertia('/publicaciones/crear', 'CrearPublicacion')->name('posts.create');
-    
-    Route::get('/recompensas', function () {
-        return Inertia::render('Recompensas');
-    });
+    // Publicaciones
+    Route::get('/publicaciones', [PostController::class, 'index'])
+        ->name('posts.index');
 
-    Route::get('/buscar', function (Request $request) {
-        return Inertia::render('ResultadosBusqueda', [
-            'q' => $request->query('q'),
-            'resultados' => [],
-        ]);
-    })->name('buscar');
+    Route::get('/publicaciones/crear', function () {
+        return Inertia::render('CrearPublicacion');
+    })->name('posts.create');
+
+    Route::post('/publicaciones', [PostController::class, 'store'])
+        ->name('posts.store');
+
+    Route::get('/publicaciones/{post}', [PostController::class, 'show'])
+        ->name('posts.show');
+
+    Route::delete('/publicaciones/{post}', [PostController::class, 'destroy'])
+        ->name('posts.destroy');
+
+    Route::post('/publicaciones/{post}/comentarios', [PostController::class, 'comment'])
+        ->name('posts.comment');
+    
+    Route::patch('/publicaciones/comentarios/{comment}', [PostController::class, 'updateComment'])
+        ->name('posts.comment.update');
+
+    Route::delete('/publicaciones/comentarios/{comment}', [PostController::class, 'deleteComment'])
+        ->name('posts.comment.delete');
+
+    Route::post('/publicaciones/{post}/valorar', [PostController::class, 'rate'])
+        ->name('posts.rate');
+    
+    // Recompensas
+    Route::get('/recompensas', [RewardController::class, 'index'])
+        ->name('rewards.index');
+
+    Route::post('/recompensas/{reward}/canjear', [RewardController::class, 'redeem'])
+        ->name('rewards.redeem');
+
+    // Resultados de búsqueda
+    Route::get('/buscar', [PostController::class, 'search'])
+        ->name('buscar');
+
+    // Tareas grupales
+    Route::get('/chats/{conversation}/tasks', [GroupTaskController::class, 'index'])
+        ->name('group-tasks.index');
+
+    Route::post('/chats/{conversation}/tasks', [GroupTaskController::class, 'store'])
+        ->name('group-tasks.store');
 
     // Chats
     Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
@@ -81,6 +118,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 //socket
     Route::post('/socket/user-offline', [SocketUserController::class, 'offline'])
-    ->withoutMiddleware([VerifyCsrfToken::class]);
+        ->withoutMiddleware([VerifyCsrfToken::class]);
 
 require __DIR__ . '/settings.php';

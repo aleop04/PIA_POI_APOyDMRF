@@ -24,6 +24,8 @@ defineProps<{
     localMicEnabled: boolean;
     activeCallUser: CallUser | null;
     activeGroupCallInfo: GroupCallInfo | null;
+    localStream: MediaStream | null;
+    groupRemoteStreams: Map<number, MediaStream>;
     groupMembers: CallUser[];
 }>();
 
@@ -42,13 +44,106 @@ function setLocalVideoRef(el: unknown) {
 function setRemoteVideoRef(el: unknown) {
     remoteVideo.value = el as HTMLVideoElement | null;
 }
+
+function setVideoStream(el: unknown, stream: MediaStream | null | undefined) {
+    const video = el as HTMLVideoElement | null;
+
+    if (!video || !stream) {
+        return;
+    }
+
+    if (video.srcObject !== stream) {
+        video.srcObject = stream;
+    }
+
+    video.play().catch(() => {});
+}
 </script>
 
 <template>
     <div class="fixed inset-0 z-[99999] flex flex-col bg-[#111111]">
         <div
-            v-if="currentCallType === 'video'"
-            class="relative flex-1 overflow-hidden bg-black"
+            v-if="groupCallActive && currentCallType === 'video'"
+            class="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FFF1D9] px-4 pb-4 pt-5 text-[#442F2F] sm:px-6 sm:pt-6"
+        >
+            <div class="mb-4 flex shrink-0 flex-col items-center text-center">
+                <UserAvatar
+                    :photo="activeGroupCallInfo?.photo ?? null"
+                    className="h-[58px] w-[58px] border-2 border-[#FF7608] sm:h-[72px] sm:w-[72px]"
+                    :alt="activeGroupCallInfo?.name ?? 'Grupo'"
+                />
+
+                <h2 class="mt-3 max-w-[280px] truncate text-[22px] font-bold sm:max-w-[520px] sm:text-[28px]">
+                    {{ activeGroupCallInfo?.name ?? 'Grupo' }}
+                </h2>
+
+                <p class="mt-1 text-[13px] font-semibold text-[#604646]/70 sm:text-[15px]">
+                    {{ groupMembers.length + 1 }} participante{{ groupMembers.length + 1 === 1 ? '' : 's' }} en videollamada
+                </p>
+            </div>
+
+            <div
+                class="grid min-h-0 flex-1 auto-rows-[170px] gap-3 overflow-y-auto pb-4 sm:auto-rows-[220px] md:auto-rows-[260px]"
+                :class="[
+                    groupMembers.length <= 1
+                        ? 'grid-cols-1'
+                        : groupMembers.length === 2
+                            ? 'grid-cols-1 sm:grid-cols-2'
+                            : 'grid-cols-2 lg:grid-cols-3'
+                ]"
+            >
+                <div class="relative h-full overflow-hidden rounded-[22px] bg-[#FFEBC9]">
+                    <video
+                        :ref="(el) => setVideoStream(el, localStream)"
+                        autoplay
+                        playsinline
+                        muted
+                        class="h-full w-full object-cover"
+                    ></video>
+
+                    <div class="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">
+                        Tú
+                    </div>
+                </div>
+
+                <div
+                    v-for="member in groupMembers"
+                    :key="member.id"
+                    class="relative h-full overflow-hidden rounded-[22px] bg-[#FFEBC9]"
+                >
+                    <video
+                        v-if="groupRemoteStreams.get(member.id)"
+                        :ref="(el) => setVideoStream(el, groupRemoteStreams.get(member.id))"
+                        autoplay
+                        playsinline
+                        class="h-full w-full object-cover"
+                    ></video>
+
+                    <div
+                        v-else
+                        class="flex h-full w-full flex-col items-center justify-center"
+                    >
+                        <UserAvatar
+                            :photo="member.profile_photo ?? null"
+                            className="h-[62px] w-[62px] border-2 border-white/15 sm:h-[86px] sm:w-[86px]"
+                            :alt="member.username ?? 'Usuario'"
+                        />
+
+                        <p class="mt-3 max-w-full truncate text-center text-[13px] font-bold text-[#442F2F] sm:text-[16px]">
+                            {{ member.username ?? 'Usuario' }}
+                        </p>
+                    </div>
+
+                    <div class="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1 text-[12px] font-bold text-white">
+                        {{ member.username ?? 'Usuario' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-else-if="currentCallType === 'video'"
+            class="relative flex-1 overflow-hidden bg-[#FFF1D9]"
         >
             <video
                 :ref="setRemoteVideoRef"
@@ -62,7 +157,7 @@ function setRemoteVideoRef(el: unknown) {
                 autoplay
                 playsinline
                 muted
-                class="absolute right-4 top-4 h-[120px] w-[90px] rounded-[16px] bg-black object-cover shadow-lg md:right-6 md:top-6 md:h-[190px] md:w-[145px]"
+                class="absolute right-4 top-4 h-[120px] w-[90px] rounded-[16px] bg-[#FFEBC9] object-cover shadow-lg md:right-6 md:top-6 md:h-[190px] md:w-[145px]"
             ></video>
         </div>
 

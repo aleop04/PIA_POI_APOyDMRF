@@ -43,6 +43,8 @@ type Conversation = {
     messages?: Message[];
 };
 
+type CallType = 'voice' | 'video';
+
 //sistema online offline desde sockets y last_seen_at en mi bd
 const onlineUserIds = ref<number[]>([]);
 
@@ -63,7 +65,7 @@ const selectedUser = ref<User | null>(null);
 const selectedGroupUsers = ref<User[]>([]);
 const messages = ref<Message[]>([]);
 const showChatInfo = ref(false);
-const activeGroupCallConversationIds = ref<number[]>([]);
+const activeGroupCalls = ref<Map<number, CallType>>(new Map());
 
 async function openChat(conversation: Conversation) {
     await openConversation(conversation);
@@ -82,16 +84,15 @@ function backToChatList() {
     showChatInfo.value = false;
 }
 
-function markGroupCallActive(conversationId: number) {
-    if (!activeGroupCallConversationIds.value.includes(conversationId)) {
-        activeGroupCallConversationIds.value.push(conversationId);
-    }
+function markGroupCallActive(
+    conversationId: number,
+    callType: CallType = 'voice',
+) {
+    activeGroupCalls.value.set(Number(conversationId), callType);
 }
 
 function markGroupCallInactive(conversationId: number) {
-    activeGroupCallConversationIds.value = activeGroupCallConversationIds.value.filter(
-        (id) => id !== conversationId,
-    );
+    activeGroupCalls.value.delete(Number(conversationId));
 }
 
 function isGroupCallActive(conversationId: number | null | undefined) {
@@ -99,7 +100,17 @@ function isGroupCallActive(conversationId: number | null | undefined) {
         return false;
     }
 
-    return activeGroupCallConversationIds.value.includes(Number(conversationId));
+    return activeGroupCalls.value.has(Number(conversationId));
+}
+
+function getActiveGroupCallType(
+    conversationId: number | null | undefined,
+): CallType {
+    if (!conversationId) {
+        return 'voice';
+    }
+
+    return activeGroupCalls.value.get(Number(conversationId)) ?? 'voice';
 }
 
 async function openConversationById(conversationId: number) {
@@ -468,15 +479,25 @@ onMounted(async () => {
         updateConversationLastMessage(newMessage);
     });
 
-    socket?.on('active-group-calls', (calls: { conversationId: number }[]) => {
-        activeGroupCallConversationIds.value = calls.map((call) =>
-            Number(call.conversationId),
-        );
-    });
+    socket?.on(
+        'active-group-calls',
+        (calls: { conversationId: number; callType?: CallType }[]) => {
+            const nextActiveGroupCalls = new Map<number, CallType>();
 
-    socket?.on('active-group-call-status', ({ conversationId, active }) => {
+            calls.forEach((call) => {
+                nextActiveGroupCalls.set(
+                    Number(call.conversationId),
+                    call.callType ?? 'voice',
+                );
+            });
+
+            activeGroupCalls.value = nextActiveGroupCalls;
+        },
+    );
+
+    socket?.on('active-group-call-status', ({ conversationId, active, callType }) => {
         if (active) {
-            markGroupCallActive(Number(conversationId));
+            markGroupCallActive(Number(conversationId), callType ?? 'voice');
         } else {
             markGroupCallInactive(Number(conversationId));
         }
@@ -488,8 +509,14 @@ onMounted(async () => {
         );
 
         if (!belongsToMe) {
-return;
-}
+            return;
+        }
+
+        const hasMessages = (conversation.messages ?? []).length > 0;
+
+        if (conversation.type === 'private' && !hasMessages) {
+            return;
+        }
 
         addConversationIfMissing({
             ...conversation,
@@ -510,7 +537,10 @@ return;
     });
 
     socket?.on('group-call-user-joined', ({ conversationId }) => {
-        markGroupCallActive(Number(conversationId));
+        markGroupCallActive(
+            Number(conversationId),
+            getActiveGroupCallType(Number(conversationId)),
+        );
     });
 
     socket?.on('group-call-ended', ({ conversationId }) => {
@@ -651,6 +681,7 @@ onBeforeUnmount(() => {
                     :messages="messages"
                     :online-user-ids="onlineUserIds"
                     :has-active-group-call="isGroupCallActive(selectedConversation?.id)"
+                    :active-group-call-type="getActiveGroupCallType(selectedConversation?.id)"
                     @open-chat="openChat"
                     @open-group-chat="openGroupChat"
                     @create-group="crearGrupo"

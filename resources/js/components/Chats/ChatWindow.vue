@@ -33,6 +33,8 @@ type Conversation = {
     messages?: Message[];
 };
 
+type CallType = 'voice' | 'video';
+
 defineProps<{
     mode: 'empty' | 'create-group' | 'send-message' | 'active-chat';
     selectedUser: User | null;
@@ -41,6 +43,7 @@ defineProps<{
     messages: Message[];
     onlineUserIds: number[];
     hasActiveGroupCall: boolean;
+    activeGroupCallType: CallType;
 }>();
 
 const emit = defineEmits<{
@@ -80,6 +83,7 @@ const emit = defineEmits<{
             :messages="messages"
             :online-user-ids="onlineUserIds"
             :has-active-group-call="hasActiveGroupCall"
+            :active-group-call-type="activeGroupCallType"
             @change-group-name="emit('change-group-name', $event)"
             @message-sent="emit('message-sent', $event)"
             @toggle-info="emit('toggle-info')"

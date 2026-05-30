@@ -9,12 +9,44 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\Password;
+use App\Models\Post;
+use App\Models\RewardRedemption;
 
 class DestinarioPerfilController extends Controller
 {
     public function show(Request $request): Response
     {
         $user = $request->user()->load('location');
+
+        $posts = Post::with([
+            'user:id,username,profile_photo',
+            'photos',
+            'location',
+        ])
+        ->withAvg('ratings', 'rating')
+        ->where('user_id', Auth::id())
+        ->where('is_active', true)
+        ->latest()
+        ->get();
+
+        $badgeRedemptions = RewardRedemption::query()
+            ->where('user_id', auth()->id())
+            ->whereHas('reward', function ($query) {
+                $query->where('type', 'badge');
+            })
+            ->with('reward')
+            ->latest('redeemed_at')
+            ->get();
+
+        $discountRedemptions = RewardRedemption::query()
+            ->where('user_id', auth()->id())
+            ->whereHas('reward', function ($query) {
+                $query->where('type', 'discount');
+            })
+            ->with('reward')
+            ->latest('redeemed_at')
+            ->get();
+
         return Inertia::render('Perfil', [
             'user' => [
                 'id' => $request->user()->id,
@@ -28,6 +60,9 @@ class DestinarioPerfilController extends Controller
                 'total_points' => $request->user()->total_points,
                 'location' => $user->location?->formatted_address,
             ],
+            'posts' => $posts,
+            'badges' => $badgeRedemptions,
+            'discounts' => $discountRedemptions,
         ]);
     }
 
@@ -69,11 +104,6 @@ class DestinarioPerfilController extends Controller
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
             $user->save();
-        }
-
-        if (!empty($validated['password'])) {
-        $user->password = Hash::make($validated['password']);
-        $user->save();
         }
 
         $user->update($data);

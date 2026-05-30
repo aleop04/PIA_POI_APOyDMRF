@@ -6,6 +6,7 @@ import UserAvatar from '@/components/UserAvatar.vue';
 import AudioRecordingBar from './AudioRecordingBar.vue';
 
 const showAttachMenu = ref(false);
+const showGroupCallModal = ref(false);
 
 const imageInput = ref<HTMLInputElement | null>(null);
 
@@ -68,6 +69,8 @@ type Message = {
     }[];
 };
 
+type CallType = 'voice' | 'video';
+
 const props = defineProps<{
     user?: ChatUser | null;
     groupUsers?: ChatUser[];
@@ -81,6 +84,7 @@ const props = defineProps<{
 
     messages: any[];
     hasActiveGroupCall?: boolean;
+    activeGroupCallType?: CallType;
 }>();
 
 const emit = defineEmits<{
@@ -137,22 +141,30 @@ function startVoiceCall() {
     }
 
     if (props.conversation.type === 'group') {
-        window.dispatchEvent(
-            new CustomEvent('destinario:start-group-call', {
-                detail: {
-                    fromUser: authUser.value,
-                    conversationId: props.conversation.id,
-                    callType: 'voice',
-                    members: props.groupUsers ?? [],
-                    group: {
-                        id: props.conversation.id,
-                        name: props.conversation.name,
-                        photo: props.conversation.photo,
-                    },
-                },
-            }),
-        );
+        requestGroupCallAction('video');
     }
+}
+
+function startGroupCall(callType: CallType) {
+    if (!props.conversation || props.conversation.type !== 'group') {
+        return;
+    }
+
+    window.dispatchEvent(
+        new CustomEvent('destinario:start-group-call', {
+            detail: {
+                fromUser: authUser.value,
+                conversationId: props.conversation.id,
+                callType,
+                members: props.groupUsers ?? [],
+                group: {
+                    id: props.conversation.id,
+                    name: props.conversation.name,
+                    photo: props.conversation.photo,
+                },
+            },
+        }),
+    );
 }
 
 function joinActiveGroupCall() {
@@ -166,6 +178,7 @@ function joinActiveGroupCall() {
                 conversationId: props.conversation.id,
                 members: props.groupUsers ?? [],
                 fromUser: authUser.value,
+                callType: props.activeGroupCallType ?? 'voice',
                 group: {
                     id: props.conversation.id,
                     name: props.conversation.name,
@@ -176,27 +189,59 @@ function joinActiveGroupCall() {
     );
 }
 
-//
-
-// para llamada de video 1 a 1
-
-function startVideoCall() {
-    if (!props.conversation || props.conversation.type !== 'private' || !props.user) {
+function requestGroupCallAction(callType: CallType) {
+    if (!props.conversation || props.conversation.type !== 'group') {
         return;
     }
 
-    window.dispatchEvent(
-        new CustomEvent('destinario:start-call', {
-            detail: {
-                toUser: props.user,
-                fromUser: authUser.value,
-                conversationId: props.conversation.id,
-                callType: 'video',
-            },
-        }),
-    );
+    if (props.hasActiveGroupCall) {
+        showGroupCallModal.value = true;
 
-    console.log('Videollamando a:', props.user.username);
+        return;
+    }
+
+    startGroupCall(callType);
+}
+//
+
+// para llamada de voz grupal
+function confirmGroupCallAction() {
+    showGroupCallModal.value = false;
+    joinActiveGroupCall();
+}
+//
+
+// para llamada de video 1 a 1 y grupal
+
+function startVideoCall() {
+    if (!props.conversation) {
+        return;
+    }
+
+    if (props.conversation.type === 'private') {
+        if (!props.user) {
+            return;
+        }
+
+        window.dispatchEvent(
+            new CustomEvent('destinario:start-call', {
+                detail: {
+                    toUser: props.user,
+                    fromUser: authUser.value,
+                    conversationId: props.conversation.id,
+                    callType: 'video',
+                },
+            }),
+        );
+
+        console.log('Videollamando a:', props.user.username);
+
+        return;
+    }
+
+    if (props.conversation.type === 'group') {
+        requestGroupCallAction('voice');
+    }
 }
 
 const newMessage = ref('');
@@ -505,7 +550,7 @@ async function sendLocation() {
                     v-if="!isSelfPrivateChat"
                     type="button"
                     class="cursor-pointer transition hover:scale-105 hover:opacity-80"
-                    @click="startVoiceCall"
+                    @click="conversation?.type === 'group' ? requestGroupCallAction('voice') : startVoiceCall()"
                 >
                     <img src="/icons/Phone.svg" alt="Llamada" class="h-[34px] w-[34px] sm:h-[44px] sm:w-[44px]" />
                 </button>
@@ -514,7 +559,7 @@ async function sendLocation() {
                     v-if="!isSelfPrivateChat"
                     type="button"
                     class="cursor-pointer transition hover:scale-105 hover:opacity-80"
-                    @click="startVideoCall"
+                    @click="conversation?.type === 'group' ? requestGroupCallAction('video') : startVideoCall()"
                 >
                     <img src="/icons/Video.svg" alt="Videollamada" class="h-[34px] w-[34px] sm:h-[44px] sm:w-[44px]" />
                 </button>
@@ -540,7 +585,7 @@ async function sendLocation() {
 
                 <div>
                     <p class="text-[15px] font-bold">
-                        Llamada grupal activa
+                        {{ activeGroupCallType === 'video' ? 'Videollamada grupal activa' : 'Llamada grupal activa' }}
                     </p>
 
                     <p class="text-[12px] opacity-90">
@@ -835,6 +880,47 @@ async function sendLocation() {
                 class="max-h-[90vh] max-w-[90vw] rounded-[18px] object-contain"
                 @click.stop
             />
+        </div>
+
+        <div
+            v-if="showGroupCallModal"
+            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4"
+            @click="showGroupCallModal = false"
+        >
+            <div
+                class="w-full max-w-[380px] rounded-[24px] bg-[#FFF7EB] px-6 py-7 text-center shadow-xl"
+                @click.stop
+            >
+                <h3 class="font-['Nunito_Sans'] text-[22px] font-bold text-[#442F2F]">
+                    {{ activeGroupCallType === 'video' ? 'Ya hay una videollamada activa' : 'Ya hay una llamada activa' }}
+                </h3>
+
+                <p class="mt-3 font-['Nunito_Sans'] text-[16px] font-bold text-[#442F2F]">
+                    {{
+                        activeGroupCallType === 'video'
+                            ? '¿Deseas ingresar a la videollamada grupal actual?'
+                            : '¿Deseas ingresar a la llamada grupal actual?'
+                    }}
+                </p>
+
+                <div class="mt-6 flex justify-center gap-4">
+                    <button
+                        type="button"
+                        class="rounded-full bg-[#D93636] px-5 py-2 font-['Nunito_Sans'] text-[15px] font-bold text-white transition hover:scale-105"
+                        @click="showGroupCallModal = false"
+                    >
+                        Cancelar
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rounded-full bg-[#FF7608] px-5 py-2 font-['Nunito_Sans'] text-[15px] font-bold text-white transition hover:scale-105"
+                        @click="confirmGroupCallAction"
+                    >
+                        Ingresar
+                    </button>
+                </div>
+            </div>
         </div>
 
     </div>

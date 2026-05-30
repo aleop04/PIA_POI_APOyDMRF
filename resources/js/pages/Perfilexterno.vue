@@ -2,6 +2,8 @@
 import { Head, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import ProfileCover from '@/components/Profile/ProfileCover.vue';
+import ProfileSection from '@/components/Profile/ProfileSection.vue';
+import CardPublicacion from '@/components/Posts/CardPublicacion.vue';
 
 type User = {
     id: number;
@@ -23,10 +25,17 @@ type Badge = {
 type Post = {
     id: number;
     title: string;
-    image: string | null;
-    city: string | null;
-    rating: number | null;
-    description: string | null;
+    description: string;
+    photos?: { id: number; url: string }[];
+    user?: {
+        id?: number;
+        username?: string;
+        profile_photo?: string | null;
+    };
+    ratings_avg_rating?: number | string | null;
+    location?: {
+        formatted_address: string | null;
+    } | null;
 };
 
 const props = defineProps<{
@@ -127,18 +136,34 @@ async function sendMessage() {
 
                     <div class="mt-[16px] h-px w-full bg-[#FF7608]"></div>
 
-                    <div v-if="badges.length > 0" class="mt-[39px] flex flex-wrap gap-[15px]">
+                    <div
+                        v-if="badges.length > 0"
+                        class="mt-[39px] grid w-full grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                    >
                         <div
                             v-for="badge in badges"
                             :key="badge.id"
-                            class="flex h-[91px] w-[98px] items-center justify-center rounded-full bg-[#D9D9D9]"
+                            class="flex flex-col items-center gap-3 text-center"
                         >
-                            <img
-                                v-if="badge.image"
-                                :src="badge.image"
-                                :alt="badge.name"
-                                class="h-full w-full rounded-full object-cover"
-                            />
+                            <div class="h-[92px] w-[92px] overflow-hidden rounded-full border-[4px] border-[#FF7608] bg-white shadow-md">
+                                <img
+                                    v-if="badge.image"
+                                    :src="badge.image"
+                                    :alt="badge.name"
+                                    class="h-full w-full object-cover"
+                                />
+
+                                <div
+                                    v-else
+                                    class="flex h-full w-full items-center justify-center text-[36px]"
+                                >
+                                    🏅
+                                </div>
+                            </div>
+
+                            <p class="max-w-[130px] text-[15px] font-bold text-[#FF7608]">
+                                {{ badge.name }}
+                            </p>
                         </div>
                     </div>
 
@@ -152,59 +177,19 @@ async function sendMessage() {
                 </section>
 
                 <!-- POSTS -->
-                <section class="mt-[70px]">
-                    <h2 class="font-['Nunito_Sans'] text-[48px] font-bold text-[#FF7608]">
-                        Post publicados
-                    </h2>
-
-                    <div class="mt-[16px] h-px w-full bg-[#FF7608]"></div>
-
-                    <div v-if="posts.length > 0" class="mt-[39px] flex flex-wrap gap-[68px]">
-                        <article
+                <ProfileSection
+                    title="Post publicados"
+                    class="mt-[70px]"
+                    :has-content="posts.length > 0"
+                >
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                        <CardPublicacion
                             v-for="post in posts"
                             :key="post.id"
-                            class="relative h-[449px] w-[359px] rounded-[25px] bg-[#FDF0D9] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
-                        >
-                            <img
-                                :src="post.image ?? '/images/nofound2.png'"
-                                :alt="post.title"
-                                class="absolute left-[16px] top-[20px] h-[205px] w-[328px] rounded-[25px] object-cover"
-                            />
-
-                            <h3
-                                class="absolute left-[19px] top-[239px] w-[226px] truncate font-['Nunito_Sans'] text-[32px] font-bold text-[#442F2F]"
-                            >
-                                {{ post.title }}
-                            </h3>
-
-                            <p
-                                class="absolute left-[19px] top-[290px] font-['Nunito_Sans'] text-[16px] text-[#442F2F]"
-                            >
-                                {{ post.city ?? 'Sin ciudad' }}
-                            </p>
-
-                            <p
-                                class="absolute left-[161px] top-[291px] font-['Nunito_Sans'] text-[16px] text-[#442F2F]"
-                            >
-                                {{ post.rating ?? 'N/A' }}
-                            </p>
-
-                            <p
-                                class="absolute left-[20px] top-[328px] h-[88px] w-[320px] overflow-hidden font-['Nunito_Sans'] text-[16px] text-[#442F2F]"
-                            >
-                                {{ post.description ?? 'Sin descripción.' }}
-                            </p>
-                        </article>
+                            :post="post"
+                        />
                     </div>
-
-                    <div v-else class="mt-[39px] flex w-full flex-col items-center justify-center gap-[12px]">
-                        <img src="/images/nofound2.png" class="h-[250px] w-[240px]" />
-
-                        <p class="text-center text-[22px] font-bold text-[#B4C5BD]">
-                            ¡No hay información que mostrar!
-                        </p>
-                    </div>
-                </section>
+                </ProfileSection>
             </main>
         </div>
     </section>

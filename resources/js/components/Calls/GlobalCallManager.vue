@@ -39,7 +39,7 @@ type GroupCallInfo = {
 type GroupIncomingCall = {
     fromUser: CallUser;
     conversationId: number;
-    callType: 'voice';
+    callType: CallType;
     group: GroupCallInfo;
     toUserIds?: number[];
 };
@@ -47,7 +47,7 @@ type GroupIncomingCall = {
 type GroupOutgoingCall = {
     fromUser: CallUser;
     conversationId: number;
-    callType: 'voice';
+    callType: CallType;
     members: CallUser[];
     group: GroupCallInfo;
 };
@@ -85,12 +85,28 @@ const activeGroupCallInfo = ref<GroupCallInfo | null>(null);
 const groupPeerConnections = ref<Map<number, RTCPeerConnection>>(new Map());
 const groupPendingIceCandidates = ref<Map<number, RTCIceCandidateInit[]>>(new Map());
 const groupAudioElements = ref<Map<number, HTMLAudioElement>>(new Map());
+const groupRemoteStreams = ref<Map<number, MediaStream>>(new Map());
 
 function createPeerConnection(peerUserId: number) {
     const socket = getSocket();
 
     const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: [
+            {
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                ],
+            },
+            {
+                urls: [
+                    'turn:openrelay.metered.ca:80',
+                    'turn:openrelay.metered.ca:443',
+                    'turns:openrelay.metered.ca:443',
+                ],
+                username: 'openrelayproject',
+                credential: 'openrelayproject',
+            },
+        ],
     });
 
     pc.onconnectionstatechange = () => {
@@ -149,7 +165,22 @@ function createGroupPeerConnection(peerUserId: number) {
     const socket = getSocket();
 
     const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: [
+            {
+                urls: [
+                    'stun:stun.l.google.com:19302',
+                ],
+            },
+            {
+                urls: [
+                    'turn:openrelay.metered.ca:80',
+                    'turn:openrelay.metered.ca:443',
+                    'turns:openrelay.metered.ca:443',
+                ],
+                username: 'openrelayproject',
+                credential: 'openrelayproject',
+            },
+        ],
     });
 
     pc.onicecandidate = (event) => {
@@ -170,6 +201,8 @@ function createGroupPeerConnection(peerUserId: number) {
         if (!stream) {
             return;
         }
+
+        groupRemoteStreams.value.set(peerUserId, stream);
 
         let audio = groupAudioElements.value.get(peerUserId);
 
@@ -199,7 +232,7 @@ function setVisibleGroupMembers(members: CallUser[]) {
     );
 }
 
-async function getGroupLocalAudioStream() {
+async function getGroupLocalMediaStream(callType: CallType) {
     if (localStream.value) {
         return localStream.value;
     }
@@ -210,7 +243,14 @@ async function getGroupLocalAudioStream() {
             noiseSuppression: true,
             autoGainControl: true,
         },
-        video: false,
+        video:
+            callType === 'video'
+                ? {
+                      width: { ideal: 1280 },
+                      height: { ideal: 720 },
+                      facingMode: 'user',
+                  }
+                : false,
     });
 
     stream.getAudioTracks().forEach((track) => {
@@ -283,6 +323,7 @@ function closeGroupPeerConnection(peerUserId: number) {
     }
 
     groupPendingIceCandidates.value.delete(peerUserId);
+    groupRemoteStreams.value.delete(peerUserId);
 
     groupMembers.value = groupMembers.value.filter(
         (member) => member.id !== peerUserId,
@@ -306,10 +347,10 @@ async function confirmOutgoingGroupCall() {
         .map((member) => member.id);
 
     try {
-        await getGroupLocalAudioStream();
+        await getGroupLocalMediaStream(call.callType);
 
         callStatus.value = 'connected';
-        currentCallType.value = 'voice';
+        currentCallType.value = call.callType;
         groupCallActive.value = true;
         groupConversationId.value = call.conversationId;
         groupMembers.value = [];
@@ -328,7 +369,7 @@ async function confirmOutgoingGroupCall() {
             toUserIds,
             fromUser: call.fromUser,
             conversationId: call.conversationId,
-            callType: 'voice',
+            callType: call.callType,
             group: call.group,
         });
 
@@ -353,10 +394,10 @@ async function acceptGroupCall() {
     const call = incomingGroupCall.value;
 
     try {
-        await getGroupLocalAudioStream();
+        await getGroupLocalMediaStream(call.callType);
 
         callStatus.value = 'connected';
-        currentCallType.value = 'voice';
+        currentCallType.value = call.callType;
         groupCallActive.value = true;
         groupConversationId.value = call.conversationId;
         activeCallUser.value = call.fromUser;
@@ -449,7 +490,7 @@ async function handleGroupOffer({
 
     groupConversationId.value = conversationId;
 
-    const stream = await getGroupLocalAudioStream();
+    const stream = await getGroupLocalMediaStream(currentCallType.value);
 
     let pc = groupPeerConnections.value.get(fromUserId);
 
@@ -682,6 +723,7 @@ function resetCallState() {
 
     groupPeerConnections.value.forEach((pc) => pc.close());
     groupPeerConnections.value.clear();
+    groupRemoteStreams.value.clear();
 
     groupAudioElements.value.forEach((audio) => {
         audio.pause();
@@ -885,6 +927,7 @@ async function joinActiveGroupCall(event: Event) {
         members: CallUser[];
         fromUser: CallUser;
         group: GroupCallInfo;
+        callType?: CallType;
     }>;
 
     const socket = getSocket();
@@ -900,10 +943,12 @@ async function joinActiveGroupCall(event: Event) {
     }
 
     try {
-        await getGroupLocalAudioStream();
+        const callType = customEvent.detail.callType ?? 'voice';
+
+        await getGroupLocalMediaStream(callType);
 
         callStatus.value = 'connected';
-        currentCallType.value = 'voice';
+        currentCallType.value = callType;
         groupCallActive.value = true;
         groupConversationId.value = customEvent.detail.conversationId;
         groupMembers.value = [];
@@ -1035,7 +1080,7 @@ onMounted(() => {
         }
 
         incomingGroupCall.value = data;
-        currentCallType.value = 'voice';
+        currentCallType.value = data.callType;
         callStatus.value = 'ringing';
     });
 
@@ -1138,7 +1183,7 @@ onBeforeUnmount(() => {
         mode="group"
         :photo="incomingGroupCall.group.photo ?? null"
         :title="incomingGroupCall.group.name ?? 'Grupo'"
-        call-type="voice"
+        :call-type="incomingGroupCall.callType"
         @reject="rejectGroupCall"
         @accept="acceptGroupCall"
     />
@@ -1154,6 +1199,8 @@ onBeforeUnmount(() => {
         :active-call-user="activeCallUser"
         :active-group-call-info="activeGroupCallInfo"
         :group-members="groupMembers"
+        :local-stream="localStream"
+        :group-remote-streams="groupRemoteStreams"
         @toggle-mic="toggleLocalMic"
         @end-call="endCall"
     />
@@ -1173,7 +1220,7 @@ onBeforeUnmount(() => {
         mode="group"
         :photo="pendingGroupCall.group.photo ?? null"
         :title="pendingGroupCall.group.name ?? 'Grupo'"
-        call-type="voice"
+        :call-type="pendingGroupCall.callType"
         @cancel="pendingGroupCall = null"
         @confirm="confirmOutgoingGroupCall"
     />

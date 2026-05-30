@@ -7,6 +7,7 @@ use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use App\Services\GroupTaskService;
 
 class ChatController extends Controller
 {
@@ -14,6 +15,11 @@ class ChatController extends Controller
     {
         $conversations = Auth::user()
             ->conversations()
+            ->where(function ($query) {
+                $query
+                    ->where('conversations.type', 'group')
+                    ->orWhereHas('messages');
+            })
             ->with(['users', 'messages' => function ($query) {
                 $query->latest()->limit(1);
             }])
@@ -136,6 +142,14 @@ class ChatController extends Controller
             'iv' => $encrypted['iv'] ?? null,
             'tag' => $encrypted['tag'] ?? null,
         ]);
+
+        if ($conversation->type === 'group') {
+            GroupTaskService::registerIncrementProgress(
+                auth()->id(),
+                'send_messages',
+                $conversation->id
+            );
+        }
 
         if ($request->hasFile('image')) {
             $file = $request->file('image');

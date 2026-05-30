@@ -80,7 +80,7 @@ const buscarManual = () => {
                     v-model="busqueda"
                     @location-selected="manejarSeleccion"
                     class="h-full min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-[#FFEBC9]"
-                    placeholder="Buscar dirección..."
+                    placeholder="Buscar publicaciones o direcciones..."
                 />
 
                 <button type="submit" class="ml-2 flex shrink-0 items-center justify-center">
